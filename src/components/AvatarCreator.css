@@ -1,0 +1,45 @@
+.avatar-creator-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  background: #0a0a0a;
+}
+
+.avatar-creator-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: rgba(10, 10, 10, 0.9);
+  z-index: 1001;
+  backdrop-filter: blur(10px);
+}
+
+.avatar-creator-header h2 {
+  color: #fff;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.close-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
