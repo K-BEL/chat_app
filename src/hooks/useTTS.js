@@ -1,18 +1,42 @@
 import { useState, useRef, useEffect } from 'react'
+import { TTS_CONFIG } from '../config/tts'
 
 export function useTTS() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [currentMessageId, setCurrentMessageId] = useState(null)
   const [audioVolume, setAudioVolume] = useState(0)
-  const synthRef = useRef(null)
-  const utteranceRef = useRef(null)
+  const synthRef = useRef(null) // Fallback SpeechSynthesis
+  const audioElementRef = useRef(null)
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
+  const sourceNodeRef = useRef(null)
   const animationFrameRef = useRef(null)
-  const volumeSimulationIntervalRef = useRef(null)
   const isCurrentlySpeakingRef = useRef(false)
+  const useContinueTTSRef = useRef(true) // Try Continue-TTS first
+
+  // Check if Continue-TTS service is available
+  const checkTTSService = async () => {
+    try {
+      const response = await fetch(`${TTS_CONFIG.API_URL}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(2000) // 2 second timeout
+      })
+      if (response.ok) {
+        const data = await response.json()
+        useContinueTTSRef.current = data.model_loaded !== false
+        console.log('✅ Continue-TTS service available:', useContinueTTSRef.current)
+      } else {
+        useContinueTTSRef.current = false
+        console.warn('⚠️ Continue-TTS service unavailable, using fallback')
+      }
+    } catch (error) {
+      useContinueTTSRef.current = false
+      console.warn('⚠️ Continue-TTS service unavailable, using fallback:', error.message)
+    }
+  }
 
   useEffect(() => {
+    // Initialize fallback SpeechSynthesis
     synthRef.current = window.speechSynthesis
     
     // Initialize Web Audio API for volume analysis
@@ -28,13 +52,20 @@ export function useTTS() {
       console.warn('Web Audio API not available:', error)
     }
     
+    // Check if Continue-TTS API is available
+    checkTTSService()
+    
     return () => {
       // Cleanup on unmount
+      stop()
       if (synthRef.current && synthRef.current.speaking) {
         synthRef.current.cancel()
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect()
       }
       if (audioContextRef.current) {
         audioContextRef.current.close()
@@ -42,9 +73,9 @@ export function useTTS() {
     }
   }, [])
 
-  // Analyze audio volume in real-time
+  // Analyze audio volume in real-time from Web Audio API
   const analyzeVolume = () => {
-    if (!analyserRef.current || !isSpeaking) {
+    if (!analyserRef.current || !isSpeaking || !isCurrentlySpeakingRef.current) {
       setAudioVolume(0)
       return
     }
@@ -62,18 +93,109 @@ export function useTTS() {
     
     setAudioVolume(normalizedVolume)
 
-    if (isSpeaking) {
+    if (isSpeaking && isCurrentlySpeakingRef.current) {
       animationFrameRef.current = requestAnimationFrame(analyzeVolume)
     }
   }
-
-  const speak = (text, messageId) => {
-    // Stop any current speech
-    stop()
-    
+  
+  // Generate speech using Continue-TTS API
+  const speakWithContinueTTS = async (text, messageId, voice = TTS_CONFIG.DEFAULT_VOICE) => {
+    try {
+      console.log('🎤 Generating speech with Continue-TTS...')
+      
+      const response = await fetch(`${TTS_CONFIG.API_URL}/tts/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: voice
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`TTS API error: ${response.status}`)
+      }
+      
+      // Get audio blob
+      const audioBlob = await response.blob()
+      const audioUrl = URL.createObjectURL(audioBlob)
+      
+      // Create audio element
+      const audio = new Audio(audioUrl)
+      audioElementRef.current = audio
+      
+      // Resume audio context if suspended
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume()
+      }
+      
+      // Create audio source and connect to analyser for volume analysis
+      const source = audioContextRef.current.createMediaElementSource(audio)
+      source.connect(analyserRef.current)
+      analyserRef.current.connect(audioContextRef.current.destination)
+      sourceNodeRef.current = source
+      
+      // Set up event handlers
+      audio.onplay = () => {
+        console.log('🔊 Continue-TTS started playing')
+        setIsSpeaking(true)
+        setCurrentMessageId(messageId)
+        isCurrentlySpeakingRef.current = true
+        setAudioVolume(0.5)
+        analyzeVolume() // Start volume analysis
+      }
+      
+      audio.onended = () => {
+        console.log('🔇 Continue-TTS finished playing')
+        isCurrentlySpeakingRef.current = false
+        setIsSpeaking(false)
+        setCurrentMessageId(null)
+        setAudioVolume(0)
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+        }
+        if (sourceNodeRef.current) {
+          sourceNodeRef.current.disconnect()
+          sourceNodeRef.current = null
+        }
+        URL.revokeObjectURL(audioUrl)
+      }
+      
+      audio.onerror = (error) => {
+        console.error('Continue-TTS audio error:', error)
+        isCurrentlySpeakingRef.current = false
+        setIsSpeaking(false)
+        setCurrentMessageId(null)
+        setAudioVolume(0)
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+        }
+        URL.revokeObjectURL(audioUrl)
+      }
+      
+      // Play audio
+      await audio.play()
+      
+    } catch (error) {
+      console.error('Continue-TTS error:', error)
+      // Fallback to browser SpeechSynthesis
+      if (TTS_CONFIG.USE_FALLBACK) {
+        console.log('🔄 Falling back to browser SpeechSynthesis')
+        useContinueTTSRef.current = false
+        speakWithFallback(text, messageId)
+      } else {
+        throw error
+      }
+    }
+  }
+  
+  // Fallback to browser SpeechSynthesis
+  const speakWithFallback = (text, messageId) => {
     if (!text || !synthRef.current) return
 
-    // Resume audio context if suspended (browser autoplay policy)
+    // Resume audio context if suspended
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume()
     }
@@ -84,55 +206,47 @@ export function useTTS() {
     utterance.pitch = 1.0
     utterance.volume = 1.0
 
-    // Since SpeechSynthesis doesn't expose audio stream directly,
-    // we'll simulate volume based on speech characteristics
-    // For a real implementation, you'd need to use a TTS service that provides audio stream
-
+    // Simulate volume since SpeechSynthesis doesn't expose audio stream
     const simulateVolume = () => {
       if (!isCurrentlySpeakingRef.current) {
-        if (volumeSimulationIntervalRef.current) {
-          clearInterval(volumeSimulationIntervalRef.current)
-          volumeSimulationIntervalRef.current = null
-        }
         return
       }
       
-      // Simulate volume based on speech pattern
-      // Create a more realistic talking pattern
       const time = Date.now() / 100
       const baseVolume = 0.4
       const variation = Math.sin(time) * 0.3 + Math.random() * 0.3
       const volumeSimulation = Math.max(0.1, Math.min(1.0, baseVolume + variation))
-      
       setAudioVolume(volumeSimulation)
     }
 
     utterance.onstart = () => {
-      console.log('🔊 TTS started speaking')
+      console.log('🔊 Fallback TTS started speaking')
       setIsSpeaking(true)
       setCurrentMessageId(messageId)
       isCurrentlySpeakingRef.current = true
-      setAudioVolume(0.5) // Start with medium volume
+      setAudioVolume(0.5)
       
-      // Clear any existing interval
-      if (volumeSimulationIntervalRef.current) {
-        clearInterval(volumeSimulationIntervalRef.current)
-      }
+      // Update volume every 50ms
+      const interval = setInterval(() => {
+        if (!isCurrentlySpeakingRef.current) {
+          clearInterval(interval)
+          return
+        }
+        simulateVolume()
+      }, 50)
       
-      // Update volume every 50ms for smooth animation
-      volumeSimulationIntervalRef.current = setInterval(simulateVolume, 50)
-      console.log('✅ Volume simulation started')
+      // Store interval ID for cleanup
+      utterance._volumeInterval = interval
     }
 
     utterance.onend = () => {
-      console.log('🔇 TTS finished speaking')
+      console.log('🔇 Fallback TTS finished speaking')
       isCurrentlySpeakingRef.current = false
       setIsSpeaking(false)
       setCurrentMessageId(null)
       setAudioVolume(0)
-      if (volumeSimulationIntervalRef.current) {
-        clearInterval(volumeSimulationIntervalRef.current)
-        volumeSimulationIntervalRef.current = null
+      if (utterance._volumeInterval) {
+        clearInterval(utterance._volumeInterval)
       }
     }
 
@@ -142,31 +256,54 @@ export function useTTS() {
       setIsSpeaking(false)
       setCurrentMessageId(null)
       setAudioVolume(0)
-      if (volumeSimulationIntervalRef.current) {
-        clearInterval(volumeSimulationIntervalRef.current)
-        volumeSimulationIntervalRef.current = null
+      if (utterance._volumeInterval) {
+        clearInterval(utterance._volumeInterval)
       }
     }
 
-    utteranceRef.current = utterance
     synthRef.current.speak(utterance)
   }
 
+  const speak = (text, messageId, voice = TTS_CONFIG.DEFAULT_VOICE) => {
+    // Stop any current speech
+    stop()
+    
+    if (!text) return
+
+    // Try Continue-TTS first, fallback to browser SpeechSynthesis
+    if (useContinueTTSRef.current) {
+      speakWithContinueTTS(text, messageId, voice)
+    } else {
+      speakWithFallback(text, messageId)
+    }
+  }
+
   const stop = () => {
+    // Stop Continue-TTS audio
+    if (audioElementRef.current) {
+      audioElementRef.current.pause()
+      audioElementRef.current.currentTime = 0
+      audioElementRef.current = null
+    }
+    
+    // Stop fallback SpeechSynthesis
     if (synthRef.current && synthRef.current.speaking) {
       synthRef.current.cancel()
     }
+    
+    // Disconnect audio source
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect()
+      sourceNodeRef.current = null
+    }
+    
     isCurrentlySpeakingRef.current = false
     setIsSpeaking(false)
     setCurrentMessageId(null)
     setAudioVolume(0)
+    
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
-    }
-    // Clear volume simulation interval
-    if (volumeSimulationIntervalRef.current) {
-      clearInterval(volumeSimulationIntervalRef.current)
-      volumeSimulationIntervalRef.current = null
     }
   }
 
