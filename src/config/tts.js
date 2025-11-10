@@ -2,8 +2,7 @@
 export const TTS_CONFIG = {
   // Backend API URL for Continue-TTS
   // Set via environment variable VITE_TTS_API_URL
-  // For local: http://localhost:5000
-  // For Vast.ai: http://<vast-ai-instance-ip>:5000
+  // Default: http://localhost:5000
   API_URL: import.meta.env.VITE_TTS_API_URL || 'http://localhost:5000',
   
   // Connection timeout (milliseconds)

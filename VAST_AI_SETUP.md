@@ -1,293 +1,234 @@
-# Vast.ai Setup Guide for Continue-TTS
+# Running Backend on Vast.ai
 
-This guide explains how to run the Continue-TTS server on Vast.ai and connect your frontend to it.
+This guide explains how to run the TTS backend server on Vast.ai and connect your local frontend to it.
 
-## Prerequisites
+## Quick Setup
 
-1. Vast.ai account
-2. GPU instance rented on Vast.ai
-3. SSH access to the instance
-
-## Step 1: Setup on Vast.ai Instance
-
-### 1.1 Connect to Your Instance
+### Step 1: On Vast.ai Terminal
 
 ```bash
-ssh root@<vast-ai-instance-ip>
+# Navigate to backend directory
+cd /workspace/chat_app/backend
+
+# Make script executable
+chmod +x start_server.sh
+
+# Start server
+./start_server.sh
 ```
 
-### 1.2 Install Dependencies
+The server will start on port 5000 and show you the IP address.
 
-```bash
-# Update system
-apt-get update
+### Step 2: Get Your Vast.ai IP
 
-# Install Python and pip
-apt-get install -y python3 python3-pip
-
-# Install backend dependencies
-cd /path/to/your/backend
-pip install -r requirements.txt
-pip install continue-speech
+After starting the server, you'll see:
+```
+🌐 Server will be accessible at: http://123.45.67.89:5000
 ```
 
-### 1.3 Run the Server
+**Save this IP address!**
 
-The server needs to be accessible from the internet. Run it with:
+### Step 3: Configure Frontend
 
-```bash
-python tts_server.py
-```
-
-**Important:** The server will bind to `0.0.0.0:5000` by default, making it accessible from outside the instance.
-
-### 1.4 Verify Server is Running
-
-Check if the server is accessible:
-
-```bash
-curl http://localhost:5000/health
-```
-
-You should see:
-```json
-{"status": "healthy", "model_loaded": true}
-```
-
-## Step 2: Configure Frontend
-
-### 2.1 Get Your Vast.ai Instance URL
-
-Your Vast.ai instance URL will be in the format:
-- `http://<vast-ai-instance-ip>:5000`
-- Or if using a custom domain/port: `http://your-domain.com:5000`
-
-### 2.2 Update Frontend Configuration
-
-Create or update `.env` file in the project root:
+On your local machine, update your `.env` file:
 
 ```env
-VITE_TTS_API_URL=http://<vast-ai-instance-ip>:5000
+VITE_TTS_API_URL=http://YOUR_VAST_AI_IP:5000
 ```
+
+Replace `YOUR_VAST_AI_IP` with the IP from Step 2.
 
 **Example:**
 ```env
-VITE_TTS_API_URL=http://123.45.67.89:5000
+VITE_TTS_API_URL=http://116.109.111.188:5000
 ```
 
-### 2.3 Restart Frontend
-
-After updating `.env`, restart your frontend:
+### Step 4: Restart Frontend
 
 ```bash
 npm run dev
 ```
 
-## Step 3: Test Connection
+### Step 5: Verify Connection
 
-1. Open your app in the browser
-2. Open browser console (F12)
-3. Look for: `✅ Continue-TTS service available: true`
-4. Send a message in Voice Mode
-5. The avatar should use Continue-TTS for speech
+1. Open browser console (F12)
+2. Look for: `✅ Continue-TTS service available: true`
+3. Test TTS in Voice Mode
+
+## Keep Server Running
+
+### Option 1: Using Screen (Recommended)
+
+```bash
+# Start server in screen session
+screen -dmS tts-server bash -c "cd /workspace/chat_app/backend && ./start_server.sh"
+
+# View logs
+screen -r tts-server
+
+# Detach: Press Ctrl+A then D
+```
+
+### Option 2: Using nohup
+
+```bash
+cd /workspace/chat_app/backend
+nohup ./start_server.sh > tts.log 2>&1 &
+
+# View logs
+tail -f tts.log
+```
+
+### Option 3: Using systemd (Advanced)
+
+Create a systemd service file:
+
+```bash
+sudo nano /etc/systemd/system/tts-server.service
+```
+
+Add:
+```ini
+[Unit]
+Description=Continue-TTS Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/workspace/chat_app/backend
+ExecStart=/usr/bin/bash /workspace/chat_app/backend/start_server.sh
+Restart=always
+RestartSec=10
+Environment="PORT=5000"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable tts-server
+sudo systemctl start tts-server
+sudo systemctl status tts-server
+```
+
+## Testing
+
+### Test from Vast.ai
+
+```bash
+curl http://localhost:5000/health
+```
+
+### Test from Your Local Machine
+
+```bash
+curl http://YOUR_VAST_AI_IP:5000/health
+```
+
+Both should return:
+```json
+{"status": "healthy", "model_loaded": false}
+```
 
 ## Troubleshooting
 
 ### Server Not Accessible
 
-**Check firewall:**
-```bash
-# Check if port 5000 is open
-netstat -tulpn | grep 5000
-
-# If using UFW firewall
-ufw allow 5000
-```
-
-**Check Vast.ai networking:**
-- Ensure your Vast.ai instance allows incoming connections on port 5000
-- Some Vast.ai instances may require port forwarding configuration
-
-### CORS Errors
-
-If you see CORS errors in the browser console:
-
-1. Check backend `tts_server.py` has CORS enabled:
-```python
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
-```
-
-2. Verify the server is running and accessible:
-```bash
-curl -X GET http://<vast-ai-instance-ip>:5000/health
-```
-
-### Connection Timeout
-
-If the frontend can't connect:
-
-1. **Check server is running:**
+1. **Check firewall:**
    ```bash
-   # On Vast.ai instance
+   # On Vast.ai
+   ufw allow 5000
+   # Or check Vast.ai dashboard for port settings
+   ```
+
+2. **Check if server is running:**
+   ```bash
    ps aux | grep tts_server
    ```
 
-2. **Check port is accessible:**
+3. **Check server logs:**
    ```bash
-   # From your local machine
-   curl http://<vast-ai-instance-ip>:5000/health
+   # If using screen
+   screen -r tts-server
+   
+   # If using nohup
+   tail -f tts.log
    ```
 
-3. **Check network connectivity:**
-   - Verify Vast.ai instance IP is correct
-   - Check if port 5000 is blocked by firewall
-   - Verify Vast.ai instance allows external connections
+### Connection Issues
 
-### Model Loading Issues
-
-If the model fails to load:
-
-1. **Check GPU availability:**
+1. **Verify IP address:**
    ```bash
-   nvidia-smi
+   # On Vast.ai
+   curl ifconfig.me
    ```
 
-2. **Check disk space:**
+2. **Check .env file:**
    ```bash
-   df -h
+   # On local machine
+   cat .env
+   # Should show: VITE_TTS_API_URL=http://YOUR_IP:5000
    ```
-   Model requires ~4GB disk space
 
-3. **Check memory:**
+3. **Test connection:**
    ```bash
-   free -h
-   ```
-   Model requires ~7GB GPU RAM (FP16) or ~14GB (FP32)
-
-## Production Considerations
-
-### Security
-
-For production, consider:
-
-1. **Restrict CORS origins:**
-   ```python
-   CORS(app, resources={
-       r"/*": {
-           "origins": ["https://yourdomain.com"],  # Your frontend URL
-           "methods": ["GET", "POST", "OPTIONS"],
-           "allow_headers": ["Content-Type"]
-       }
-   })
+   # From local machine
+   curl http://YOUR_VAST_AI_IP:5000/health
    ```
 
-2. **Add authentication:**
-   - API keys
-   - JWT tokens
-   - Rate limiting
+## Environment Variables
 
-3. **Use HTTPS:**
-   - Set up SSL certificate
-   - Use reverse proxy (nginx, Caddy)
+### On Vast.ai
 
-### Performance
-
-1. **Keep server running:**
-   - Use `screen` or `tmux` to keep server running after SSH disconnect
-   - Use systemd service for auto-start
-
-2. **Monitor resources:**
-   - Monitor GPU usage
-   - Monitor memory usage
-   - Set up logging
-
-### Using Screen (Recommended)
-
+Set port if needed:
 ```bash
-# Start a screen session
-screen -S tts-server
-
-# Run the server
-python tts_server.py
-
-# Detach: Press Ctrl+A then D
-# Reattach: screen -r tts-server
+export PORT=5000
+./start_server.sh
 ```
 
-## Example Vast.ai Setup Script
+### On Local Machine
 
-Create a setup script on your Vast.ai instance:
-
-```bash
-#!/bin/bash
-# setup_tts.sh
-
-# Install dependencies
-pip install -r requirements.txt
-pip install continue-speech
-
-# Run server in screen session
-screen -dmS tts-server python tts_server.py
-
-echo "TTS server started in screen session 'tts-server'"
-echo "To view: screen -r tts-server"
-echo "To detach: Ctrl+A then D"
+Update `.env` file:
+```env
+VITE_TTS_API_URL=http://YOUR_VAST_AI_IP:5000
 ```
 
 ## Quick Reference
 
-### Server Commands
+### Vast.ai Commands
 
 ```bash
 # Start server
-python tts_server.py
+cd /workspace/chat_app/backend
+./start_server.sh
 
 # Start in background (screen)
-screen -dmS tts-server python tts_server.py
+screen -dmS tts-server bash -c "cd /workspace/chat_app/backend && ./start_server.sh"
 
-# View server logs
+# View logs
 screen -r tts-server
 
-# Check server health
-curl http://localhost:5000/health
-
-# Check if server is running
-ps aux | grep tts_server
+# Stop server
+pkill -f tts_server.py
 ```
 
-### Frontend Configuration
-
-```env
-# .env file
-VITE_TTS_API_URL=http://<vast-ai-instance-ip>:5000
-```
-
-### Testing
+### Local Machine
 
 ```bash
-# Test from local machine
-curl http://<vast-ai-instance-ip>:5000/health
+# Update .env
+echo "VITE_TTS_API_URL=http://YOUR_VAST_AI_IP:5000" >> .env
 
-# Test TTS generation
-curl -X POST http://<vast-ai-instance-ip>:5000/tts/generate \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello, this is a test.", "voice": "nova"}' \
-  --output test.wav
+# Start frontend
+npm run dev
 ```
 
-## Support
+## Notes
 
-If you encounter issues:
-
-1. Check server logs on Vast.ai instance
-2. Check browser console for errors
-3. Verify network connectivity
-4. Check firewall settings
-5. Verify model is loaded (check `/health` endpoint)
+- Server binds to `0.0.0.0:5000` (accessible from outside)
+- CORS is enabled for remote access
+- Model loads on first request (may take 30-60 seconds)
+- Server will keep running in screen/nohup even after SSH disconnect
 

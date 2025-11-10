@@ -45,7 +45,7 @@ export function useTTS() {
       } else {
         console.warn('⚠️ Continue-TTS service unavailable, using fallback:', error.message)
       }
-      console.log('💡 Tip: Make sure the TTS server is running and accessible at:', TTS_CONFIG.API_URL)
+      console.log('💡 Tip: Make sure the TTS server is running at:', TTS_CONFIG.API_URL)
     }
   }
 
