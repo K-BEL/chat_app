@@ -17,21 +17,35 @@ export function useTTS() {
   // Check if Continue-TTS service is available
   const checkTTSService = async () => {
     try {
+      console.log(`🔍 Checking Continue-TTS service at: ${TTS_CONFIG.API_URL}`)
       const response = await fetch(`${TTS_CONFIG.API_URL}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(2000) // 2 second timeout
+        signal: AbortSignal.timeout(TTS_CONFIG.CONNECTION_TIMEOUT),
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
       if (response.ok) {
         const data = await response.json()
         useContinueTTSRef.current = data.model_loaded !== false
         console.log('✅ Continue-TTS service available:', useContinueTTSRef.current)
+        if (data.model_loaded) {
+          console.log('✅ Model is loaded and ready')
+        } else {
+          console.warn('⚠️ Model is not loaded yet, but service is available')
+        }
       } else {
         useContinueTTSRef.current = false
-        console.warn('⚠️ Continue-TTS service unavailable, using fallback')
+        console.warn('⚠️ Continue-TTS service returned error, using fallback')
       }
     } catch (error) {
       useContinueTTSRef.current = false
-      console.warn('⚠️ Continue-TTS service unavailable, using fallback:', error.message)
+      if (error.name === 'AbortError') {
+        console.warn(`⚠️ Continue-TTS service timeout (${TTS_CONFIG.CONNECTION_TIMEOUT}ms), using fallback`)
+      } else {
+        console.warn('⚠️ Continue-TTS service unavailable, using fallback:', error.message)
+      }
+      console.log('💡 Tip: Make sure the TTS server is running and accessible at:', TTS_CONFIG.API_URL)
     }
   }
 

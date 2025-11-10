@@ -17,7 +17,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend
+# Enable CORS for frontend - allow all origins for Vast.ai usage
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",  # Allow all origins (you can restrict this in production)
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Global model instance
 model = None
