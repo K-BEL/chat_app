@@ -1,7 +1,12 @@
 // TTS Configuration
 export const TTS_CONFIG = {
   // Backend API URL for Continue-TTS
+  // Set via environment variable VITE_TTS_API_URL
+  // Default: http://localhost:5000
   API_URL: import.meta.env.VITE_TTS_API_URL || 'http://localhost:5000',
+  
+  // Connection timeout (milliseconds)
+  CONNECTION_TIMEOUT: 5000,
   
   // Default voice for Continue-TTS
   DEFAULT_VOICE: 'nova',
@@ -20,5 +25,10 @@ export const TTS_CONFIG = {
   
   // Fallback to browser SpeechSynthesis if API is unavailable
   USE_FALLBACK: true
+}
+
+// Log current API URL (for debugging)
+if (import.meta.env.DEV) {
+  console.log('🔧 TTS API URL:', TTS_CONFIG.API_URL)
 }
 
