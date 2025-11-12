@@ -49,7 +49,15 @@ def load_model():
             raise RuntimeError(
                 "continue_tts is not installed. Install with: pip install continue-tts"
             )
+        # Log environment settings relevant to HF Hub
         logger.info("Loading Continue-TTS model...")
+        logger.info(
+            "HF env: HF_HUB_OFFLINE=%s TRANSFORMERS_OFFLINE=%s HF_ENDPOINT=%s HF_HOME=%s",
+            os.environ.get("HF_HUB_OFFLINE"),
+            os.environ.get("TRANSFORMERS_OFFLINE"),
+            os.environ.get("HF_ENDPOINT"),
+            os.environ.get("HF_HOME"),
+        )
         model = Continue1Model(
             model_name="SVECTOR-CORPORATION/Continue-TTS",
             max_model_len=2048,
@@ -159,7 +167,13 @@ def health():
         'continue_tts_available': Continue1Model is not None,
         'sample_rate': SAMPLE_RATE,
         'channels': CHANNELS,
-        'sample_width_bytes': SAMPLE_WIDTH
+        'sample_width_bytes': SAMPLE_WIDTH,
+        'env': {
+            'HF_HUB_OFFLINE': bool(os.environ.get('HF_HUB_OFFLINE')),
+            'TRANSFORMERS_OFFLINE': bool(os.environ.get('TRANSFORMERS_OFFLINE')),
+            'HF_ENDPOINT': os.environ.get('HF_ENDPOINT') or None,
+            'HF_HOME': os.environ.get('HF_HOME') or None,
+        }
     })
 
 @app.route('/tts/generate', methods=['POST'])
