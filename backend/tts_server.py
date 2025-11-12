@@ -52,7 +52,8 @@ def load_model():
         logger.info("Loading Continue-TTS model...")
         model = Continue1Model(
             model_name="SVECTOR-CORPORATION/Continue-TTS",
-            max_model_len=2048
+            max_model_len=2048,
+            trust_remote_code=True
         )
         model_loaded = True
         logger.info("✅ Continue-TTS model loaded successfully!")
@@ -88,15 +89,28 @@ def _chunk_to_int16_bytes(chunk) -> bytes:
     elif isinstance(chunk, (list, tuple)):
         arr = np.array(chunk, dtype=np.float32)
     elif isinstance(chunk, (bytes, bytearray)):
-        # Heuristic: if length is multiple of 2, assume already int16 PCM
-        if len(chunk) % 2 == 0:
-            return bytes(chunk)
-        # Otherwise attempt to interpret as float32 and convert
-        try:
-            float_arr = np.frombuffer(chunk, dtype=np.float32)
-            arr = float_arr
-        except ValueError:
-            return bytes(chunk)
+        # Heuristic for bytes: try float32 first if size aligns and range looks like [-1,1]
+        b = bytes(chunk)
+        handled = False
+        if len(b) % 4 == 0 and len(b) >= 4:
+            try:
+                farr = np.frombuffer(b, dtype=np.float32)
+                if farr.size > 0:
+                    max_abs = float(np.max(np.abs(farr)))
+                else:
+                    max_abs = 0.0
+                # If values look like normalized audio, treat as float32 samples
+                if 0.0 <= max_abs <= 1.5:
+                    arr = farr
+                    handled = True
+            except Exception:
+                pass
+        if not handled:
+            # Fallback: assume int16 PCM if even length
+            if len(b) % 2 == 0:
+                return b
+            # Last resort: return as-is
+            return b
     else:
         logger.warning(f"Unknown audio chunk type: {type(chunk)} - skipping")
         return b''
@@ -204,6 +218,18 @@ def generate_speech():
 
         if len(audio_chunks) == 0:
             return jsonify({'error': 'Empty audio output'}), 500
+
+        # Debug: log info about first chunk
+        first = audio_chunks[0]
+        try:
+            if isinstance(first, torch.Tensor):
+                logger.info(f"First chunk type=torch.Tensor, dtype={first.dtype}, shape={tuple(first.shape)}")
+            elif isinstance(first, np.ndarray):
+                logger.info(f"First chunk type=np.ndarray, dtype={first.dtype}, shape={first.shape}")
+            else:
+                logger.info(f"First chunk type={type(first)}, len={len(first) if hasattr(first, '__len__') else 'n/a'}")
+        except Exception:
+            pass
 
         # Convert chunks to 16-bit PCM
         audio_data = _combine_chunks_to_pcm(audio_chunks)

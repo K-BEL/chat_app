@@ -131,7 +131,20 @@ export function useTTS() {
       if (!response.ok) {
         throw new Error(`TTS API error: ${response.status}`)
       }
-      
+
+      // Ensure we actually received audio
+      const contentType = (response.headers.get('Content-Type') || '').toLowerCase()
+      if (!contentType.includes('audio')) {
+        // Try to surface server error message
+        try {
+          const maybeJson = await response.clone().json()
+          throw new Error(maybeJson.error || 'TTS server did not return audio')
+        } catch (_) {
+          const text = await response.text()
+          throw new Error(text || 'TTS server did not return audio')
+        }
+      }
+
       // Get audio blob
       const audioBlob = await response.blob()
       const audioUrl = URL.createObjectURL(audioBlob)
