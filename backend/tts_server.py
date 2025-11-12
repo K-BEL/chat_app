@@ -8,8 +8,14 @@ import torch
 import wave
 import io
 import numpy as np
-from continue_tts import Continue1Model
 import logging
+try:
+    from continue_tts import Continue1Model
+except Exception as _import_err:
+    Continue1Model = None
+    logging.getLogger(__name__).warning(
+        "continue_tts package not available yet; model will be loaded lazily when requested."
+    )
 import os
 
 # Configure logging
@@ -26,18 +32,23 @@ CORS(app, resources={
     }
 })
 
-# Global model instance
+# Global model instance / audio config
 model = None
 model_loaded = False
+SAMPLE_RATE = 24000  # Hz
+CHANNELS = 1
+SAMPLE_WIDTH = 2  # bytes (16-bit PCM)
 
 def load_model():
     """Load the Continue-TTS model"""
     global model, model_loaded
-    
     if model_loaded:
         return model
-    
     try:
+        if Continue1Model is None:
+            raise RuntimeError(
+                "continue_tts is not installed. Install with: pip install continue-tts"
+            )
         logger.info("Loading Continue-TTS model...")
         model = Continue1Model(
             model_name="SVECTOR-CORPORATION/Continue-TTS",
@@ -50,12 +61,91 @@ def load_model():
         logger.error(f"❌ Failed to load model: {e}")
         raise
 
+
+def _chunk_to_int16_bytes(chunk) -> bytes:
+    """Convert a model audio chunk (tensor/ndarray/bytes/list) to 16-bit PCM little-endian bytes.
+    Accepts:
+      - torch.Tensor (float32 / float16 / int16)
+      - np.ndarray
+      - bytes (assumed already PCM or float32)
+      - list (converted to np.array)
+    Floats are expected in range [-1, 1]; will be clipped then scaled.
+    """
+    if chunk is None:
+        return b''
+    # Torch tensor
+    if isinstance(chunk, torch.Tensor):
+        if chunk.dtype in (torch.float32, torch.float64, torch.float16):
+            arr = chunk.detach().cpu().float().numpy()
+        elif chunk.dtype == torch.int16:
+            arr = chunk.detach().cpu().numpy().astype(np.int16)
+            return arr.tobytes()
+        else:
+            # Fallback: convert to float then scale
+            arr = chunk.detach().cpu().float().numpy()
+    elif isinstance(chunk, np.ndarray):
+        arr = chunk
+    elif isinstance(chunk, (list, tuple)):
+        arr = np.array(chunk, dtype=np.float32)
+    elif isinstance(chunk, (bytes, bytearray)):
+        # Heuristic: if length is multiple of 2, assume already int16 PCM
+        if len(chunk) % 2 == 0:
+            return bytes(chunk)
+        # Otherwise attempt to interpret as float32 and convert
+        try:
+            float_arr = np.frombuffer(chunk, dtype=np.float32)
+            arr = float_arr
+        except ValueError:
+            return bytes(chunk)
+    else:
+        logger.warning(f"Unknown audio chunk type: {type(chunk)} - skipping")
+        return b''
+
+    # Ensure 1-D
+    if arr.ndim > 1:
+        arr = arr.reshape(-1)
+    # Convert float types
+    if arr.dtype.kind == 'f':
+        # Clip to [-1,1]
+        np.clip(arr, -1.0, 1.0, out=arr)
+        int16_arr = (arr * 32767.0).astype(np.int16)
+        return int16_arr.tobytes()
+    if arr.dtype == np.int16:
+        return arr.tobytes()
+    # Fallback: cast
+    try:
+        return arr.astype(np.int16).tobytes()
+    except Exception as e:
+        logger.warning(f"Failed casting chunk to int16: {e}")
+        return b''
+
+
+def _combine_chunks_to_pcm(chunks) -> bytes:
+    """Combine multiple chunks into a single PCM byte stream."""
+    pcm_buffers = []
+    total_samples = 0
+    for i, ch in enumerate(chunks):
+        b = _chunk_to_int16_bytes(ch)
+        if not b:
+            continue
+        pcm_buffers.append(b)
+        total_samples += len(b) // SAMPLE_WIDTH
+    combined = b''.join(pcm_buffers)
+    logger.info(f"Combined {len(pcm_buffers)} chunks into {len(combined)} bytes ({total_samples} samples)")
+    if combined:
+        logger.debug(f"First 16 bytes hex: {combined[:16].hex()}")
+    return combined
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'model_loaded': model_loaded
+        'model_loaded': model_loaded,
+        'continue_tts_available': Continue1Model is not None,
+        'sample_rate': SAMPLE_RATE,
+        'channels': CHANNELS,
+        'sample_width_bytes': SAMPLE_WIDTH
     })
 
 @app.route('/tts/generate', methods=['POST'])
@@ -95,7 +185,7 @@ def generate_speech():
         if not model_loaded:
             load_model()
         
-        # Generate speech
+        # Generate speech (may return iterable of tensors / arrays / bytes)
         audio_chunks = model.generate_speech(
             prompt=text,
             voice=voice,
@@ -104,29 +194,38 @@ def generate_speech():
             max_tokens=1200,
             repetition_penalty=1.3
         )
-        
-        # Convert audio chunks to WAV format
-        audio_data = b''.join(audio_chunks)
-        
-        # Create WAV file in memory
+
+        if audio_chunks is None:
+            return jsonify({'error': 'Model returned no audio'}), 500
+
+        # Some APIs yield a generator; force materialization
+        if not isinstance(audio_chunks, (list, tuple)):
+            audio_chunks = list(audio_chunks)
+
+        if len(audio_chunks) == 0:
+            return jsonify({'error': 'Empty audio output'}), 500
+
+        # Convert chunks to 16-bit PCM
+        audio_data = _combine_chunks_to_pcm(audio_chunks)
+        if not audio_data:
+            return jsonify({'error': 'Failed to convert audio chunks'}), 500
+
+        # Build WAV file
         wav_buffer = io.BytesIO()
         with wave.open(wav_buffer, 'wb') as wf:
-            wf.setnchannels(1)  # Mono
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(24000)  # 24kHz sample rate
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(SAMPLE_WIDTH)
+            wf.setframerate(SAMPLE_RATE)
             wf.writeframes(audio_data)
         
         wav_buffer.seek(0)
-        
-        logger.info(f"✅ Speech generated successfully ({len(audio_data)} bytes)")
-        
+        logger.info(f"✅ Speech generated successfully ({len(audio_data)} bytes PCM)")
         return send_file(
             wav_buffer,
             mimetype='audio/wav',
             as_attachment=False,
             download_name='speech.wav'
         )
-        
     except Exception as e:
         logger.error(f"Error generating speech: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
@@ -146,6 +245,23 @@ def get_voices():
             {'id': 'ember', 'name': 'Ember', 'gender': 'Female', 'description': 'Warm and engaging'}
         ]
     })
+
+@app.route('/tts/test', methods=['GET'])
+def test_tts():
+    """Generate a short 440Hz sine wave for 1 second to test audio pipeline."""
+    duration = 1.0
+    freq = 440.0
+    t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
+    waveform = 0.2 * np.sin(2 * np.pi * freq * t)  # moderate amplitude
+    pcm = (waveform * 32767.0).astype(np.int16).tobytes()
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(SAMPLE_WIDTH)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(pcm)
+    buf.seek(0)
+    return send_file(buf, mimetype='audio/wav', as_attachment=False, download_name='test_tone.wav')
 
 if __name__ == '__main__':
     # Check if running in development mode
