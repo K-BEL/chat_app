@@ -305,7 +305,7 @@ def test_tts():
 
 if __name__ == '__main__':
     # Check if running in development mode
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
     
     logger.info(f"Starting TTS server on port {port}")
