@@ -67,6 +67,48 @@ def load_model():
         logger.info("✅ Continue-TTS model loaded successfully!")
         return model
     except Exception as e:
+        # Detect NVML/pynvml decode errors and retry with GPU disabled/CPU fallback
+        err_msg = f"{e}"
+        if (
+            isinstance(e, UnicodeDecodeError)
+            or "pynvml" in err_msg
+            or "nvmlDeviceGetName" in err_msg
+            or "UnicodeDecodeError" in err_msg
+        ):
+            logger.warning(
+                "Detected NVML decode error while loading model. Retrying with GPU disabled and CPU fallback."
+            )
+            # Hide GPUs from torch/vLLM and try to suppress NVML usage
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+            os.environ.setdefault("VLLM_USE_NVML", "0")
+            os.environ.setdefault("VLLM_SKIP_NVML", "1")
+            try:
+                model = Continue1Model(
+                    model_name="SVECTOR-CORPORATION/Continue-TTS",
+                    max_model_len=2048,
+                    trust_remote_code=True,
+                    device="cpu",  # Attempt to force CPU if supported
+                )
+                model_loaded = True
+                logger.info("✅ Continue-TTS model loaded successfully in CPU mode (GPU disabled).")
+                return model
+            except TypeError:
+                # device kw not supported; retry without it
+                model = Continue1Model(
+                    model_name="SVECTOR-CORPORATION/Continue-TTS",
+                    max_model_len=2048,
+                    trust_remote_code=True,
+                )
+                model_loaded = True
+                logger.info("✅ Continue-TTS model loaded successfully after disabling GPU visibility.")
+                return model
+            except Exception as e2:
+                logger.error(
+                    f"❌ CPU fallback load also failed: {e2}. Original error: {e}",
+                    exc_info=True,
+                )
+                raise
+        # Other errors - re-raise
         logger.error(f"❌ Failed to load model: {e}")
         raise
 
@@ -173,6 +215,9 @@ def health():
             'TRANSFORMERS_OFFLINE': bool(os.environ.get('TRANSFORMERS_OFFLINE')),
             'HF_ENDPOINT': os.environ.get('HF_ENDPOINT') or None,
             'HF_HOME': os.environ.get('HF_HOME') or None,
+            'CUDA_VISIBLE_DEVICES': os.environ.get('CUDA_VISIBLE_DEVICES') or None,
+            'VLLM_USE_NVML': os.environ.get('VLLM_USE_NVML') or None,
+            'VLLM_SKIP_NVML': os.environ.get('VLLM_SKIP_NVML') or None,
         }
     })
 
