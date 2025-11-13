@@ -1,1 +1,1 @@
-{"error":"'utf-8' codec can't decode byte 0xf8 in position 0: invalid start byte"}
+{"error":"CUDA_VISIBLE_DEVICES is set to empty string, which means GPU support is disabled. If you are using ray, please unset the environment variable `CUDA_VISIBLE_DEVICES` inside the worker/actor. Check https://github.com/vllm-project/vllm/issues/8402 for more information."}

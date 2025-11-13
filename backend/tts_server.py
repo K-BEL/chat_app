@@ -79,15 +79,15 @@ def load_model():
                 "Detected NVML decode error while loading model. Retrying with GPU disabled and CPU fallback."
             )
             # Hide GPUs from torch/vLLM and try to suppress NVML usage
-            os.environ["CUDA_VISIBLE_DEVICES"] = ""
-            os.environ.setdefault("VLLM_USE_NVML", "0")
-            os.environ.setdefault("VLLM_SKIP_NVML", "1")
+            # os.environ["CUDA_VISIBLE_DEVICES"] = ""
+            os.environ.setdefault("VLLM_USE_NVML", "1")
+            os.environ.setdefault("VLLM_SKIP_NVML", "0")
             try:
                 model = Continue1Model(
                     model_name="SVECTOR-CORPORATION/Continue-TTS",
                     max_model_len=2048,
                     trust_remote_code=True,
-                    device="cpu",  # Attempt to force CPU if supported
+                    device="cuda",  # Attempt to force CPU if supported
                 )
                 model_loaded = True
                 logger.info("✅ Continue-TTS model loaded successfully in CPU mode (GPU disabled).")
