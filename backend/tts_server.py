@@ -191,8 +191,11 @@ def generate_speech():
     - Audio file (WAV format) as binary
     """
     try:
-        data = request.get_json()
-        
+        # Enforce JSON input to avoid decoding binary as UTF-8
+        if not request.is_json:
+            return jsonify({'error': 'Unsupported media type. Use Content-Type: application/json'}), 415
+
+        data = request.get_json(silent=True)
         if not data or 'text' not in data:
             return jsonify({'error': 'Missing "text" field'}), 400
         

@@ -29,7 +29,7 @@ fi
 
 # Install continue-speech if not installed
 echo "📦 Installing continue-speech..."
-pip3 install continue-speech --quiet 2>/dev/null || pip3 install continue-speech
+pip install continue-speech
 echo "✅ continue-speech installed"
 
 # Get IP address
