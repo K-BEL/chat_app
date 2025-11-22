@@ -6,6 +6,7 @@ A beautiful, modern chat interface for interacting with Groq AI (powered by Llam
 
 - 🎨 Modern, clean UI with gradient design
 - 💬 Real-time chat with Groq AI (ultra-fast inference)
+- 🎤 Voice Mode with text-to-speech (TTS) support
 - ⌨️ Smooth typing experience
 - 📱 Responsive design
 - ⚡ Powered by Llama 3.3 70B model
@@ -72,11 +73,19 @@ chat_app/
 │   │   ├── ChatBox.jsx      # Main chat component
 │   │   └── ChatBox.css      # Chat styling
 │   ├── hooks/
-│   │   └── useGroq.js       # Groq API integration hook
+│   │   ├── useGroq.js       # Groq API integration hook
+│   │   └── useTTS.js        # Text-to-speech hook
+│   ├── utils/
+│   │   └── markdown.js      # Markdown parsing utility
+│   ├── config/
+│   │   └── tts.js           # TTS configuration
 │   ├── App.jsx              # Main app component
 │   ├── App.css              # App styling
 │   ├── main.jsx             # Entry point
 │   └── index.css            # Global styles
+├── backend/
+│   ├── tts_server.py        # TTS backend server
+│   └── requirements.txt    # Python dependencies
 ├── index.html
 ├── package.json
 └── vite.config.js
@@ -84,8 +93,16 @@ chat_app/
 
 ## Usage
 
-1. Type your message in the input box at the bottom
-2. Press Enter or click the send button
-3. Wait for the AI response
-4. Continue the conversation!
+1. The app opens directly to the chat interface
+2. Toggle between **Text Mode** (💬) and **Voice Mode** (🎤) using the button in the header
+3. In Voice Mode, AI responses are automatically read aloud using TTS
+4. Type your message in the input box at the bottom
+5. Press Enter or click the send button
+6. Wait for the AI response
+7. Continue the conversation!
+
+### Modes
+
+- **Text Mode**: Chat with AI using text only. No audio features.
+- **Voice Mode**: Chat with AI and hear responses read aloud. Includes auto-play TTS and manual play/pause controls for each message.
 

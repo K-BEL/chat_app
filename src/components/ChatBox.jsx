@@ -2,21 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { useGroq } from '../hooks/useGroq'
 import { useTTS } from '../hooks/useTTS'
 import { parseMarkdown } from '../utils/markdown'
-import Avatar3D from './Avatar3D'
 import './ChatBox.css'
 
-function ChatBox({ mode, avatarUrl, useSingleModel = false }) {
+function ChatBox({ mode, onModeChange }) {
   const [input, setInput] = useState('')
   const { messages, sendMessage, isLoading } = useGroq()
-  const { speak, stop, isSpeaking, currentMessageId, audioVolume } = useTTS()
+  const { speak, stop, isSpeaking, currentMessageId } = useTTS()
   const messagesEndRef = useRef(null)
   const isVoiceMode = mode === 'voice'
   const autoPlayRef = useRef(isVoiceMode) // Auto-play TTS only in voice mode
-  
-  // Get current emotion from last AI message
-  const currentEmotion = messages.length > 0 && messages[messages.length - 1].role === 'assistant'
-    ? messages[messages.length - 1].content
-    : null
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -26,6 +20,11 @@ function ChatBox({ mode, avatarUrl, useSingleModel = false }) {
     scrollToBottom()
   }, [messages, isLoading])
 
+  // Update autoPlayRef when mode changes
+  useEffect(() => {
+    autoPlayRef.current = isVoiceMode
+  }, [isVoiceMode])
+
   // Auto-play TTS for new AI messages (only in voice mode)
   useEffect(() => {
     if (isVoiceMode && messages.length > 0) {
@@ -34,7 +33,6 @@ function ChatBox({ mode, avatarUrl, useSingleModel = false }) {
         const messageId = messages.length - 1
         // Small delay to ensure message is rendered
         const timeoutId = setTimeout(() => {
-          console.log('🔊 Auto-playing TTS for message:', lastMessage.content.substring(0, 50) + '...')
           speak(lastMessage.content, messageId)
         }, 300)
         return () => clearTimeout(timeoutId)
@@ -74,25 +72,29 @@ function ChatBox({ mode, avatarUrl, useSingleModel = false }) {
     }
   }
 
+  const toggleMode = () => {
+    const newMode = mode === 'text' ? 'voice' : 'text'
+    onModeChange(newMode)
+    if (newMode === 'text') {
+      stop() // Stop any playing audio when switching to text mode
+    }
+  }
+
   return (
     <div className="chat-container">
-      {isVoiceMode && (
-        <div className="avatar-panel">
-          <Avatar3D 
-            isSpeaking={isSpeaking} 
-            audioVolume={audioVolume} 
-            avatarUrl={avatarUrl}
-            currentMessage={currentEmotion}
-            useSingleModel={useSingleModel}
-          />
-        </div>
-      )}
       <div className="chat-content">
         <div className="chat-header">
           <div className="header-content">
             <h1>AI Chat - {mode === 'voice' ? 'Voice Mode' : 'Text Mode'}</h1>
-            {isVoiceMode && (
-              <div className="header-actions">
+            <div className="header-actions">
+              <button
+                className="mode-toggle"
+                onClick={toggleMode}
+                title={`Switch to ${mode === 'text' ? 'Voice' : 'Text'} Mode`}
+              >
+                {mode === 'voice' ? '🎤' : '💬'}
+              </button>
+              {isVoiceMode && (
                 <button
                   className="tts-toggle"
                   onClick={() => {
@@ -103,8 +105,8 @@ function ChatBox({ mode, avatarUrl, useSingleModel = false }) {
                 >
                   {autoPlayRef.current ? '🔊' : '🔇'}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
         
