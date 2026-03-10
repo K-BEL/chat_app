@@ -9,7 +9,7 @@ export const TTS_CONFIG = {
   CONNECTION_TIMEOUT: 5000,
   
   // Default voice for Continue-TTS
-  DEFAULT_VOICE: 'nova',
+  DEFAULT_VOICE: 'orion',
   
   // Available voices
   VOICES: [

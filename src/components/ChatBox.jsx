@@ -239,7 +239,7 @@ function ChatBox({ mode, onModeChange }) {
                     dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
                   />
                   
-                  {message.role === 'assistant' && isVoiceMode && (
+                  {message.role === 'assistant' && (
                     <div className="mt-3 flex options-bar opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => handleSpeak(message.content, index)}

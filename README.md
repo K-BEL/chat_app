@@ -1,108 +1,166 @@
 # AI Chat App
 
-A beautiful, modern chat interface for interacting with Groq AI (powered by Llama models).
+A premium, glassmorphic chat application built with **React**, **Tailwind CSS v4**, and **Lucide React** icons. Supports multiple LLM providers out of the box — Groq, OpenAI, Anthropic, and local Ollama models — with an optional cloud-based TTS backend.
 
-## Features
+---
 
-- 🎨 Modern, clean UI with gradient design
-- 💬 Real-time chat with Groq AI (ultra-fast inference)
-- 🎤 Voice Mode with text-to-speech (TTS) support
-- ⌨️ Smooth typing experience
-- 📱 Responsive design
-- ⚡ Powered by Llama 3.3 70B model
+## ✨ Features
 
-## Setup
+- 🧠 **Multi-Provider Support** — Groq, OpenAI, Anthropic, and Local Ollama
+- 🎨 **Premium Glassmorphic UI** — Dark mode, gradient glows, smooth animations
+- 🔄 **Model Switcher Pill** — Quick-switch between providers and models from the header
+- 🚀 **Quick Start Cards** — Interactive onboarding cards (Analyze Code, Draft Content, Summarize, Brainstorm)
+- 🎤 **Voice Mode / TTS** — Text-to-speech with automatic browser fallback
+- ✍️ **Multi-line Input** — Expandable textarea with glassmorphism effect
+- 📱 **Fully Responsive** — Works on desktop and mobile
 
-### Frontend Setup
+---
 
-1. Install dependencies:
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18+)
+- An API Key from at least one provider (see below)
+
+### 1. Install Dependencies
+
 ```bash
+cd chat_app
 npm install
 ```
 
-2. Create a `.env` file in the root directory:
-```env
-VITE_GROQ_API_KEY=your_groq_api_key_here
-VITE_TTS_API_URL=http://localhost:5000
+### 2. Configure Environment Variables
+
+```bash
+cp .env.example .env
 ```
 
-3. Start the development server:
+Edit `.env` and add your API key(s):
+
+```env
+# Required: Add at least one provider key
+VITE_GROQ_API_KEY=gsk_your_groq_key_here
+VITE_OPENAI_API_KEY=sk-your_openai_key_here
+VITE_ANTHROPIC_API_KEY=sk-ant-your_anthropic_key_here
+
+# Optional: TTS backend URL (see Section 3 below)
+# VITE_TTS_API_URL=http://localhost:5001
+```
+
+### 3. Start the Dev Server
+
 ```bash
 npm run dev
 ```
 
-4. Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:5173`)
+Open `http://localhost:5173` in your browser.
 
-### Backend Setup (Optional - for TTS)
+### Where to Get API Keys
 
-The app includes an optional Continue-TTS backend for high-quality speech synthesis.
+| Provider  | URL                                        |
+|-----------|--------------------------------------------|
+| Groq      | https://console.groq.com/keys              |
+| OpenAI    | https://platform.openai.com/api-keys       |
+| Anthropic | https://console.anthropic.com/settings/keys|
 
-#### Option 1: Run Backend Locally
+### Using Local Ollama (No API Key Needed)
+
+If you have [Ollama](https://ollama.com/) installed and running, the app auto-detects your local models on startup. Just select **Local (Ollama)** from the Model Switcher.
+
+---
+
+## 🎙️ TTS Backend (Optional — Vast.ai)
+
+The app includes a high-fidelity TTS backend powered by the `SVECTOR-CORPORATION/Continue-TTS` model. This requires an Nvidia GPU, so the recommended method is to rent one on [Vast.ai](https://vast.ai/).
+
+> **Without the backend**, TTS falls back gracefully to your browser's built-in `speechSynthesis` — everything still works!
+
+### Setup on Vast.ai
+
+#### 1. Add Your SSH Key to Vast.ai
 
 ```bash
-cd backend
-pip install -r requirements.txt
-pip install continue-speech
-python tts_server.py
+# Copy your public key
+cat *.pub
 ```
 
-#### Option 2: Run Backend on Vast.ai (Recommended)
+Paste it into your [Vast.ai Account Settings → SSH Keys](https://console.vast.ai/account).
 
-See `VAST_AI_SETUP.md` for detailed instructions.
+#### 2. Rent a GPU Instance
 
-Quick start:
-1. On Vast.ai: `cd /workspace/chat_app/backend && ./start_server.sh`
-2. Get IP address
-3. Update `.env`: `VITE_TTS_API_URL=http://YOUR_VAST_AI_IP:5000`
-4. Restart frontend: `npm run dev`
+- Go to the **Create** tab on Vast.ai
+- Select the **PyTorch** template
+- Choose a GPU with **16GB+ VRAM** (e.g., RTX 3090, 4090, A5000)
+- Ensure **30GB+ disk space**
+- Click **Rent**
 
-## Getting Your Groq API Key
+#### 3. Transfer & Run the Backend
 
-1. Go to [Groq Console](https://console.groq.com/)
-2. Sign up or log in
-3. Navigate to API Keys section
-4. Create a new API key
-5. Copy the key and paste it in your `.env` file
+```bash
+# From your Mac — copy backend files to the instance
+scp -P <PORT> -r backend root@<IP>:/root/backend
 
-## Project Structure
+# SSH into the instance
+ssh -p <PORT> root@<IP> -L 8080:localhost:8080
+
+# On the remote machine
+cd backend
+pip install flask flask-cors numpy continue-speech
+PORT=8080 python3 tts_server.py
+```
+
+> First run downloads the ~7GB model from HuggingFace.
+
+#### 4. Point Your Frontend to the Cloud
+
+Find the external URL mapped to port 8080 on your Vast.ai instance dashboard, then update your `.env`:
+
+```env
+VITE_TTS_API_URL=http://<VAST_IP>:<MAPPED_PORT>
+```
+
+Restart Vite (`npm run dev`) and test Voice Mode with the 🎤 button!
+
+---
+
+## 📁 Project Structure
 
 ```
 chat_app/
 ├── src/
 │   ├── components/
-│   │   ├── ChatBox.jsx      # Main chat component
-│   │   └── ChatBox.css      # Chat styling
+│   │   ├── ChatBox.jsx        # Main chat UI component
+│   │   └── ChatBox.css        # Legacy styles (Tailwind used inline)
 │   ├── hooks/
-│   │   ├── useGroq.js       # Groq API integration hook
-│   │   └── useTTS.js        # Text-to-speech hook
-│   ├── utils/
-│   │   └── markdown.js      # Markdown parsing utility
+│   │   ├── useChatModel.js    # Multi-provider chat hook
+│   │   └── useTTS.js          # Text-to-speech hook
 │   ├── config/
-│   │   └── tts.js           # TTS configuration
-│   ├── App.jsx              # Main app component
-│   ├── App.css              # App styling
-│   ├── main.jsx             # Entry point
-│   └── index.css            # Global styles
+│   │   ├── models.js          # Provider & model definitions
+│   │   └── tts.js             # TTS configuration
+│   ├── utils/
+│   │   └── markdown.js        # Markdown parsing utility
+│   ├── App.jsx
+│   ├── App.css
+│   ├── main.jsx
+│   └── index.css              # Tailwind v4 import + base styles
 ├── backend/
-│   ├── tts_server.py        # TTS backend server
-│   └── requirements.txt    # Python dependencies
-├── index.html
-├── package.json
-└── vite.config.js
+│   ├── tts_server.py          # Flask TTS server (Continue-TTS)
+│   ├── start_server.sh        # One-click server launcher
+│   ├── requirements.txt       # Python dependencies
+│   └── README.md              # Backend-specific docs
+├── .env.example
+├── postcss.config.js
+├── tailwind.config.js
+├── vite.config.js
+└── package.json
 ```
 
-## Usage
+## 🛠️ Tech Stack
 
-1. The app opens directly to the chat interface
-2. Toggle between **Text Mode** (💬) and **Voice Mode** (🎤) using the button in the header
-3. In Voice Mode, AI responses are automatically read aloud using TTS
-4. Type your message in the input box at the bottom
-5. Press Enter or click the send button
-6. Wait for the AI response
-7. Continue the conversation!
-
-### Modes
-
-- **Text Mode**: Chat with AI using text only. No audio features.
-- **Voice Mode**: Chat with AI and hear responses read aloud. Includes auto-play TTS and manual play/pause controls for each message.
-
+| Layer     | Technology                                     |
+|-----------|-------------------------------------------------|
+| Frontend  | React 18, Vite 5, Tailwind CSS v4, Lucide React |
+| LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local)         |
+| TTS       | Continue-TTS (cloud), Browser SpeechSynthesis    |
+| Backend   | Python Flask, PyTorch, vLLM                      |
