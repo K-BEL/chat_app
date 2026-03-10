@@ -1,10 +1,1 @@
-.app {
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
-  background: #0f0f0f;
-}
-
+/* Kept empty as we will use Tailwind utility classes in App.jsx directly */
