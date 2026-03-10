@@ -34,7 +34,7 @@ echo "✅ continue-speech installed"
 
 # Get IP address
 IP=$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}' || echo "localhost")
-PORT=${PORT:-5000}
+PORT=${PORT:-5001}
 
 echo ""
 echo "===================================="
