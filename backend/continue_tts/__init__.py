@@ -2,6 +2,5 @@
 
 __version__ = "1.0.0"
 
-# Import and expose the main function
+# Only expose the decoder (no vLLM dependency needed)
 from .decoder import tokens_decoder_sync
-from .engine_class import Continue1Model
