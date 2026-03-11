@@ -9,7 +9,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-PORT=${PORT:-8081}
+PORT=${PORT:-8080}
 MODEL_NAME="SVECTOR-CORPORATION/Continue-TTS"
 HF_CACHE="${HF_HOME:-/workspace/.hf_home}/hub/models--SVECTOR-CORPORATION--Continue-TTS"
 
@@ -86,7 +86,7 @@ fi
 # ─── Step 3: Install pip dependencies ────────────────────────────────────────
 info "Installing Python dependencies..."
 
-PACKAGES="flask flask-cors numpy snac accelerate hf_transfer transformers"
+PACKAGES="flask flask-cors numpy snac accelerate hf_transfer transformers qwen-asr"
 $PIP install --quiet $PACKAGES 2>/dev/null || $PIP install $PACKAGES
 ok "All pip packages installed"
 

@@ -4,6 +4,7 @@ import torch
 import wave
 import io
 import numpy as np
+import tempfile
 import logging
 import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -15,12 +16,17 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+# TTS globals
 model = None
 tokenizer = None
 model_loaded = False
 SAMPLE_RATE = 24000
 CHANNELS = 1
 SAMPLE_WIDTH = 2
+
+# ASR globals
+asr_model = None
+asr_loaded = False
 
 def load_model():
     global model, tokenizer, model_loaded
@@ -51,12 +57,34 @@ def _format_prompt(prompt, voice="nova", tokenizer=None):
     all_input_ids = torch.cat([start_token, prompt_tokens.input_ids, end_tokens], dim=1)
     return all_input_ids
 
+def load_asr_model():
+    global asr_model, asr_loaded
+    if asr_loaded:
+        return asr_model
+    try:
+        logger.info("Loading Qwen3-ASR-1.7B model...")
+        from qwen_asr import Qwen3ASRModel
+        asr_model = Qwen3ASRModel.from_pretrained(
+            "Qwen/Qwen3-ASR-1.7B",
+            dtype=torch.bfloat16,
+            device_map="cuda:0" if torch.cuda.is_available() else "cpu",
+            max_new_tokens=512,
+        )
+        asr_loaded = True
+        logger.info("✅ ASR model loaded successfully!")
+        return asr_model
+    except Exception as e:
+        logger.error(f"❌ Failed to load ASR model: {e}")
+        raise
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
         'status': 'healthy',
         'model_loaded': model_loaded,
+        'asr_loaded': asr_loaded,
         'continue_tts_available': True,
+        'asr_available': True,
         'sample_rate': SAMPLE_RATE,
         'channels': CHANNELS,
         'sample_width_bytes': SAMPLE_WIDTH,
@@ -124,6 +152,43 @@ def generate_speech():
 def test_tts():
     return send_file(io.BytesIO(b'RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00'), mimetype='audio/wav')
 
+@app.route('/asr/transcribe', methods=['POST'])
+def transcribe_audio():
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided. Send as multipart form with key "audio"'}), 400
+
+        audio_file = request.files['audio']
+        language = request.form.get('language', None)  # Optional: "English", "Chinese", etc.
+
+        # Save to temp file for processing
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            audio_file.save(tmp.name)
+            tmp_path = tmp.name
+
+        try:
+            if not asr_loaded:
+                load_asr_model()
+
+            results = asr_model.transcribe(
+                audio=tmp_path,
+                language=language,
+            )
+
+            if not results:
+                return jsonify({'error': 'No transcription produced'}), 500
+
+            return jsonify({
+                'text': results[0].text,
+                'language': results[0].language,
+            })
+        finally:
+            os.unlink(tmp_path)
+
+    except Exception as e:
+        logger.error(f"ASR Error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8081))
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)

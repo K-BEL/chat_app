@@ -2,7 +2,7 @@
 # Test TTS generation via SSH tunnel
 # Usage: bash test_tts.sh [port]
 
-TTS_PORT="${1:-8081}"
+TTS_PORT="${1:-8080}"
 TTS_URL="http://localhost:${TTS_PORT}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 

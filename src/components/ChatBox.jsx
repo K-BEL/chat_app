@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useChatModel } from '../hooks/useChatModel'
 import { useTTS } from '../hooks/useTTS'
+import { useASR } from '../hooks/useASR'
 import { parseMarkdown } from '../utils/markdown'
 import { PROVIDERS, MODELS } from '../config/models'
 import { 
-  Settings, Mic, MessageSquare, Image as ImageIcon, Paperclip, 
-  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu
+  Settings, Mic, MicOff, MessageSquare, Image as ImageIcon, Paperclip, 
+  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu, Loader2
 } from 'lucide-react'
 
 // Brand colors for subtle glows
@@ -40,6 +41,7 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
   }, [activeConversation?.id, activeConversation?.messages, loadMessages])
   
   const { speak, stop, isSpeaking, currentMessageId, selectedVoice, setSelectedVoice, voices } = useTTS()
+  const { isRecording, isTranscribing, startRecording, stopAndTranscribe } = useASR()
   const messagesEndRef = useRef(null)
   const isVoiceMode = mode === 'voice'
   const autoPlayRef = useRef(isVoiceMode)
@@ -346,6 +348,43 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
             />
 
             <div className="flex items-center gap-2 pb-1 pr-1">
+              {/* Mic → Transcribe button */}
+              <button 
+                type="button" 
+                onClick={async () => {
+                  if (isRecording) {
+                    try {
+                      const text = await stopAndTranscribe()
+                      if (text) setInput(prev => prev ? prev + ' ' + text : text)
+                    } catch (err) {
+                      console.error('ASR failed:', err)
+                    }
+                  } else {
+                    try {
+                      await startRecording()
+                    } catch (err) {
+                      console.error('Mic failed:', err)
+                    }
+                  }
+                }}
+                disabled={isTranscribing}
+                className={`p-2.5 rounded-full transition-all duration-300 ${
+                  isRecording 
+                    ? 'bg-red-500/30 text-red-400 ring-2 ring-red-500/50 animate-pulse' 
+                    : isTranscribing
+                    ? 'bg-amber-500/20 text-amber-400 cursor-wait'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                }`}
+                title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Record voice'}
+              >
+                {isTranscribing 
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : isRecording 
+                  ? <MicOff className="w-4 h-4" /> 
+                  : <Mic className="w-4 h-4" />
+                }
+              </button>
+
               <button 
                 type="button" 
                 onClick={toggleMode}

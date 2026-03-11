@@ -9,8 +9,12 @@ A premium, glassmorphic chat application built with **React**, **Tailwind CSS v4
 - 🧠 **Multi-Provider Support** — Groq, OpenAI, Anthropic, and Local Ollama
 - 🎨 **Premium Glassmorphic UI** — Dark mode, gradient glows, smooth animations
 - 🔄 **Model Switcher Pill** — Quick-switch between providers and models from the header
+- 🎤 **Voice Mode / TTS** — Cloud-powered AI voices (8 voices) with automatic browser fallback
+- 🗣️ **Voice Picker** — Choose between Nova, Orion, Aurora, Ember, and more from Settings
+- 🎙️ **Voice Input / ASR** — Record speech → transcribe with Qwen3-ASR-1.7B on GPU
+- 💬 **Conversation History** — Auto-saved to localStorage with sidebar navigation
+- 📌 **Sidebar** — Slide-out panel listing all past chats with timestamps and delete
 - 🚀 **Quick Start Cards** — Interactive onboarding cards (Analyze Code, Draft Content, Summarize, Brainstorm)
-- 🎤 **Voice Mode / TTS** — Text-to-speech with automatic browser fallback
 - ✍️ **Multi-line Input** — Expandable textarea with glassmorphism effect
 - 📱 **Fully Responsive** — Works on desktop and mobile
 
@@ -86,8 +90,11 @@ The app includes a high-fidelity TTS backend powered by the `SVECTOR-CORPORATION
 # 1. SSH into Vast.ai with port forwarding
 ssh -p <PORT> root@<IP> -L 8081:localhost:8081
 
-# 2. On the remote machine — start the TTS server
-PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server.py
+# 2. On the remote machine — start the TTS server (one-click)
+bash /workspace/chat_app/backend/start_server.sh
+
+# OR manually:
+PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server_hf.py
 
 # 3. On your Mac — update .env and start Vite
 echo "VITE_TTS_API_URL=http://localhost:8081" >> .env
@@ -225,33 +232,68 @@ open backend/generate/test_orion.wav
 
 ---
 
+## 🎙️ Speech-to-Text (Qwen3-ASR)
+
+The app includes a **mic button** 🎙️ in the input area that records your voice and transcribes it using [Qwen3-ASR-1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) (~3.5 GB model, 52 languages supported).
+
+### How It Works
+
+1. Click the **🎙️ mic button** (left of the send button) to start recording
+2. The button turns **red and pulses** while recording
+3. Click again to **stop** — audio is sent to the backend `/asr/transcribe` endpoint
+4. Transcribed text appears in the input box, ready to send
+
+### Deployment
+
+The ASR model runs alongside the TTS model on the same GPU. It's included in `start_server.sh` automatically:
+
+```bash
+# qwen-asr is installed by start_server.sh
+# The model downloads (~3.5 GB) on first mic use
+```
+
+To test ASR from the command line:
+
+```bash
+curl -X POST http://localhost:8081/asr/transcribe \
+  -F "audio=@recording.wav"
+# Returns: {"text": "Hello world", "language": "English"}
+```
+
+> **Without the GPU backend**, the mic button will show an error in the console. A future update could add browser-based `SpeechRecognition` as a fallback.
+
+---
+
 ## 📁 Project Structure
 
 ```
 chat_app/
 ├── src/
 │   ├── components/
-│   │   ├── ChatBox.jsx        # Main chat UI component
+│   │   ├── ChatBox.jsx        # Main chat UI (messages, input, settings)
+│   │   ├── Sidebar.jsx        # Conversation history sidebar
 │   │   └── ChatBox.css        # Legacy styles (Tailwind used inline)
 │   ├── hooks/
-│   │   ├── useChatModel.js    # Multi-provider chat hook
-│   │   └── useTTS.js          # Text-to-speech hook (cloud + browser fallback)
+│   │   ├── useChatModel.js    # Multi-provider chat hook (with persistence)
+│   │   ├── useConversations.js # Conversation CRUD + localStorage
+│   │   ├── useASR.js          # Mic recording + Qwen3-ASR transcription
+│   │   └── useTTS.js          # TTS hook (cloud + browser fallback + voice picker)
 │   ├── config/
 │   │   ├── models.js          # Provider & model definitions
-│   │   └── tts.js             # TTS configuration
+│   │   └── tts.js             # TTS config (voices, API URL, timeouts)
 │   ├── utils/
 │   │   └── markdown.js        # Markdown parsing utility
-│   ├── App.jsx
+│   ├── App.jsx                # Root layout (sidebar + chat)
 │   ├── App.css
 │   ├── main.jsx
 │   └── index.css              # Tailwind v4 import + base styles
 ├── backend/
+│   ├── tts_server_hf.py       # Flask TTS + ASR server (PyTorch + SNAC + Qwen3-ASR)
 │   ├── tts_server.py          # Flask TTS server (vLLM — may crash on Vast.ai)
-│   ├── tts_server_hf.py       # Flask TTS server (PyTorch + SNAC — recommended)
 │   ├── continue_tts/          # Extracted continue-tts source (decoder.py)
 │   ├── generate/              # Test audio output folder
 │   │   └── test_tts.sh        # Shell script to test TTS generation
-│   ├── start_server.sh        # One-click server launcher
+│   ├── start_server.sh        # One-click installer & launcher (auto-installs deps, CUDA, model)
 │   ├── requirements.txt       # Python dependencies
 │   └── README.md              # Backend-specific docs
 ├── .env                       # API keys + VITE_TTS_API_URL
@@ -269,6 +311,8 @@ chat_app/
 | Frontend  | React 18, Vite 5, Tailwind CSS v4, Lucide React          |
 | LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local)                   |
 | TTS       | Continue-TTS (cloud GPU), Browser SpeechSynthesis (fallback) |
+| ASR       | Qwen3-ASR-1.7B (cloud GPU), 52 languages                    |
+| Storage   | Browser localStorage (conversation history)                |
 | Backend   | Python Flask, PyTorch, HuggingFace Transformers, SNAC Codec |
 | Infra     | Vast.ai (GPU rental), SSH tunneling                        |
 
