@@ -5,6 +5,7 @@ export function useTTS() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [currentMessageId, setCurrentMessageId] = useState(null)
   const [audioVolume, setAudioVolume] = useState(0)
+  const [selectedVoice, setSelectedVoice] = useState(TTS_CONFIG.DEFAULT_VOICE)
   const synthRef = useRef(null) // Fallback SpeechSynthesis
   const audioElementRef = useRef(null)
   const audioContextRef = useRef(null)
@@ -340,5 +341,8 @@ export function useTTS() {
     isSpeaking,
     currentMessageId,
     audioVolume,
+    selectedVoice,
+    setSelectedVoice,
+    voices: TTS_CONFIG.VOICES,
   }
 }

@@ -5,7 +5,7 @@ import { parseMarkdown } from '../utils/markdown'
 import { PROVIDERS, MODELS } from '../config/models'
 import { 
   Settings, Mic, MessageSquare, Image as ImageIcon, Paperclip, 
-  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause
+  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu
 } from 'lucide-react'
 
 // Brand colors for subtle glows
@@ -16,18 +16,30 @@ const brandStyles = {
   local: 'from-blue-500/20 to-purple-500/20 text-blue-400 border-blue-500/30'
 }
 
-function ChatBox({ mode, onModeChange }) {
+function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onFirstMessage, onToggleSidebar }) {
   const [input, setInput] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const [localModels, setLocalModels] = useState(MODELS.local || [])
   
   const { 
-    messages, sendMessage, isLoading,
+    messages, sendMessage, loadMessages, isLoading,
     activeProvider, setActiveProvider,
     activeModel, setActiveModel 
-  } = useChatModel()
+  } = useChatModel('groq', 'llama-3.3-70b-versatile', {
+    initialMessages: activeConversation?.messages || [],
+    onMessagesChange,
+  })
+
+  // Load messages when switching conversations
+  const prevConvIdRef = useRef(activeConversation?.id)
+  useEffect(() => {
+    if (activeConversation?.id !== prevConvIdRef.current) {
+      prevConvIdRef.current = activeConversation?.id
+      loadMessages(activeConversation?.messages || [])
+    }
+  }, [activeConversation?.id, activeConversation?.messages, loadMessages])
   
-  const { speak, stop, isSpeaking, currentMessageId } = useTTS()
+  const { speak, stop, isSpeaking, currentMessageId, selectedVoice, setSelectedVoice, voices } = useTTS()
   const messagesEndRef = useRef(null)
   const isVoiceMode = mode === 'voice'
   const autoPlayRef = useRef(isVoiceMode)
@@ -67,7 +79,7 @@ function ChatBox({ mode, onModeChange }) {
       if (lastMessage.role === 'assistant' && autoPlayRef.current && !isLoading) {
         const messageId = messages.length - 1
         const timeoutId = setTimeout(() => {
-          speak(lastMessage.content, messageId)
+          speak(lastMessage.content, messageId, selectedVoice)
         }, 300)
         return () => clearTimeout(timeoutId)
       }
@@ -92,6 +104,10 @@ function ChatBox({ mode, onModeChange }) {
     e.preventDefault()
     if (input.trim() && !isLoading) {
       stop()
+      // Auto-create conversation on first message
+      if (!activeConversation) {
+        onFirstMessage()
+      }
       sendMessage(input)
       setInput('')
       if (textareaRef.current) {
@@ -104,7 +120,7 @@ function ChatBox({ mode, onModeChange }) {
     if (isSpeaking && currentMessageId === messageId) {
       stop()
     } else {
-      speak(content, messageId)
+      speak(content, messageId, selectedVoice)
     }
   }
 
@@ -143,6 +159,13 @@ function ChatBox({ mode, onModeChange }) {
       <div className="relative z-20 w-full flex flex-col items-center mt-2">
         <div className="glass-panel flex items-center justify-between gap-4 px-4 py-2 rounded-full ring-1 ring-white/10 transition-all shadow-xl">
           <div className="flex items-center gap-2 border-r border-white/10 pr-4">
+            <button
+              onClick={onToggleSidebar}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-gray-200 transition-colors"
+              title="Toggle sidebar"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
             <span className={`flex items-center justify-center w-8 h-8 rounded-full bg-white/5 border border-white/10 ${providerStyle.split(' ')[2]}`}>
               <Bot className="w-4 h-4" />
             </span>
@@ -162,7 +185,7 @@ function ChatBox({ mode, onModeChange }) {
 
         {/* Retractable Settings Menu */}
         <div className={`mt-4 absolute top-14 left-1/2 -translate-x-1/2 glass-panel p-5 rounded-2xl w-[90%] md:w-[600px] transition-all duration-300 origin-top transform ${showSettings ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 -translate-y-4 pointer-events-none'}`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="flex flex-col space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">Provider</label>
               <select 
@@ -184,6 +207,18 @@ function ChatBox({ mode, onModeChange }) {
               >
                 {activeModelsList?.map(model => (
                   <option key={model.id} value={model.id}>{model.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">Voice</label>
+              <select 
+                value={selectedVoice} 
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="bg-black/50 border border-white/10 text-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-amber-500/50 appearance-none transition-all cursor-pointer"
+              >
+                {voices.map(voice => (
+                  <option key={voice.id} value={voice.id}>{voice.name} ({voice.gender})</option>
                 ))}
               </select>
             </div>

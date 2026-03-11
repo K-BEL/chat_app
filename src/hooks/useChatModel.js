@@ -1,12 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PROVIDERS, MODELS } from '../config/models';
 
-export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3-70b-versatile') {
-  const [messages, setMessages] = useState([]);
+export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3-70b-versatile', { initialMessages = [], onMessagesChange } = {}) {
+  const [messages, setMessages] = useState(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   
   const [activeProvider, setActiveProvider] = useState(initialProvider);
   const [activeModel, setActiveModel] = useState(initialModel);
+  const onMessagesChangeRef = useRef(onMessagesChange);
+  onMessagesChangeRef.current = onMessagesChange;
+
+  // Notify parent when messages change (for persistence)
+  useEffect(() => {
+    if (onMessagesChangeRef.current) {
+      onMessagesChangeRef.current(messages);
+    }
+  }, [messages]);
+
+  // Allow loading a different conversation's messages
+  const loadMessages = (newMessages) => {
+    setMessages(newMessages);
+  };
 
   const sendMessage = async (userMessage) => {
     const userMsg = { role: 'user', content: userMessage };
@@ -61,12 +75,6 @@ export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3
         apiResponse = data.choices?.[0]?.message?.content || '(no reply)';
 
       } else if (providerConfig.format === 'anthropic') {
-         // Anthropic specific format
-         
-         // Extract system messages if any, though Anthropic typically expects system message at the top level, 
-         // and we are mostly sending user/assistant history.
-         // Claude requires alternating user/assistant messages.
-         
          const claudeMessages = conversationHistory.filter(m => m.role !== 'system');
          
          const response = await fetch(providerConfig.apiEndpoint, {
@@ -75,7 +83,6 @@ export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
-            // Need to set cors headers or proxy in real-world if browser blocks Anthropic API direct
           },
           body: JSON.stringify({
             model: activeModel,
@@ -112,6 +119,7 @@ export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3
   return {
     messages,
     sendMessage,
+    loadMessages,
     isLoading,
     activeProvider,
     setActiveProvider,
