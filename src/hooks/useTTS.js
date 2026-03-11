@@ -27,12 +27,12 @@ export function useTTS() {
       })
       if (response.ok) {
         const data = await response.json()
-        useContinueTTSRef.current = data.model_loaded !== false
+        useContinueTTSRef.current = data.continue_tts_available === true
         console.log('✅ Continue-TTS service available:', useContinueTTSRef.current)
         if (data.model_loaded) {
           console.log('✅ Model is loaded and ready')
         } else {
-          console.warn('⚠️ Model is not loaded yet, but service is available')
+          console.warn('⚠️ Model is not loaded yet, but service is available and will load on first request')
         }
       } else {
         useContinueTTSRef.current = false
@@ -134,7 +134,7 @@ export function useTTS() {
 
       // Ensure we actually received audio
       const contentType = (response.headers.get('Content-Type') || '').toLowerCase()
-      if (!contentType.includes('audio')) {
+      if (!contentType.includes('audio') && !contentType.includes('application/octet-stream')) {
         // Try to surface server error message
         try {
           const maybeJson = await response.clone().json()

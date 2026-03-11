@@ -70,19 +70,40 @@ If you have [Ollama](https://ollama.com/) installed and running, the app auto-de
 
 ---
 
-## 🎙️ TTS Backend (Optional — Vast.ai)
+## 🎙️ TTS Backend (Cloud GPU — Vast.ai)
 
-The app includes a high-fidelity TTS backend powered by the `SVECTOR-CORPORATION/Continue-TTS` model. This requires an Nvidia GPU, so the recommended method is to rent one on [Vast.ai](https://vast.ai/).
+The app includes a high-fidelity TTS backend powered by the `SVECTOR-CORPORATION/Continue-TTS` model (~15 GB). This requires an Nvidia GPU, so the recommended method is to rent one on [Vast.ai](https://vast.ai/).
 
 > **Without the backend**, TTS falls back gracefully to your browser's built-in `speechSynthesis` — everything still works!
 
-### Setup on Vast.ai
+> **⚠️ Important:** The original `continue-tts` library uses **vLLM** for inference, which crashes on many Vast.ai instances due to GPU memory/IPC issues. This project uses a **custom PyTorch + SNAC decoder** that bypasses vLLM entirely. The custom server lives in `backend/tts_server.py` (based on `tts_server_hf.py`).
+
+---
+
+### Quick Start (If You've Done This Before)
+
+```bash
+# 1. SSH into Vast.ai with port forwarding
+ssh -p <PORT> root@<IP> -L 8081:localhost:8081
+
+# 2. On the remote machine — start the TTS server
+PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server.py
+
+# 3. On your Mac — update .env and start Vite
+echo "VITE_TTS_API_URL=http://localhost:8081" >> .env
+npm run dev
+```
+
+> The first TTS request takes ~20-30s (model loads into GPU). Subsequent requests are fast (~5s).
+
+---
+
+### Full Setup on Vast.ai (First Time)
 
 #### 1. Add Your SSH Key to Vast.ai
 
 ```bash
-# Copy your public key
-cat *.pub
+cat ~/.ssh/id_rsa.pub
 ```
 
 Paste it into your [Vast.ai Account Settings → SSH Keys](https://console.vast.ai/account).
@@ -91,36 +112,116 @@ Paste it into your [Vast.ai Account Settings → SSH Keys](https://console.vast.
 
 - Go to the **Create** tab on Vast.ai
 - Select the **PyTorch** template
-- Choose a GPU with **16GB+ VRAM** (e.g., RTX 3090, 4090, A5000)
-- Ensure **30GB+ disk space**
+- Choose a GPU with **16 GB+ VRAM** (e.g., RTX 3090, 4090, A5000)
+- Ensure **50 GB+ disk space** (model weights are ~15 GB)
 - Click **Rent**
 
-#### 3. Transfer & Run the Backend
+#### 3. Transfer Backend Files to the Instance
 
 ```bash
-# From your Mac — copy backend files to the instance
-scp -P <PORT> -r backend root@<IP>:/root/backend
-
-# SSH into the instance
-ssh -p <PORT> root@<IP> -L 8080:localhost:8080
-
-# On the remote machine
-cd backend
-pip install flask flask-cors numpy continue-speech
-PORT=8080 python3 tts_server.py
+# From your Mac
+scp -P <PORT> -r backend root@<IP>:/workspace/chat_app/backend
 ```
 
-> First run downloads the ~7GB model from HuggingFace.
+#### 4. Install Python Dependencies on the Remote Machine
 
-#### 4. Point Your Frontend to the Cloud
+```bash
+# SSH into Vast.ai
+ssh -p <PORT> root@<IP>
 
-Find the external URL mapped to port 8080 on your Vast.ai instance dashboard, then update your `.env`:
-
-```env
-VITE_TTS_API_URL=http://<VAST_IP>:<MAPPED_PORT>
+# Install required packages
+/venv/main/bin/pip install flask flask-cors numpy snac accelerate hf_transfer
 ```
 
-Restart Vite (`npm run dev`) and test Voice Mode with the 🎤 button!
+| Package       | Why                                                     |
+|---------------|----------------------------------------------------------|
+| `flask`       | HTTP server                                              |
+| `flask-cors`  | CORS headers for browser requests                        |
+| `numpy`       | Audio PCM array conversion                               |
+| `snac`        | SNAC 24kHz neural audio codec (decodes model tokens → WAV) |
+| `accelerate`  | HuggingFace `device_map="auto"` GPU placement             |
+| `hf_transfer` | Fast Rust-based model weight downloader                   |
+
+#### 5. Download the Model Weights (One-Time, ~10 min)
+
+```bash
+HF_HUB_ENABLE_HF_TRANSFER=1 /venv/main/bin/python3 -c "
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+m = AutoModelForCausalLM.from_pretrained('SVECTOR-CORPORATION/Continue-TTS', device_map='auto', dtype=torch.float16, trust_remote_code=True)
+print('✅ Model downloaded and loaded successfully')
+print('Devices:', m.hf_device_map)
+"
+```
+
+> Weights are cached in `/workspace/.hf_home/hub/` (~15 GB). Subsequent loads take ~2 seconds.
+
+#### 6. Start the TTS Server
+
+```bash
+PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server.py
+```
+
+You should see:
+```
+ * Serving Flask app 'tts_server'
+ * Running on http://127.0.0.1:8081
+```
+
+#### 7. Set Up SSH Tunnel (From Your Mac)
+
+Open a **separate terminal** on your Mac:
+
+```bash
+ssh -p <PORT> root@<IP> -L 8081:localhost:8081
+```
+
+This tunnels `localhost:8081` on your Mac → port `8081` on the Vast.ai GPU.
+
+#### 8. Configure & Run the Frontend
+
+```bash
+# Set the TTS URL in .env
+# (already done if you followed the quick start)
+VITE_TTS_API_URL=http://localhost:8081
+
+# Start Vite
+npm run dev
+```
+
+Open `http://localhost:5173`, send a message, and click the **🎤 Read** button on any assistant response!
+
+---
+
+### Testing TTS From the Command Line
+
+A test script is available in `backend/generate/test_tts.sh`:
+
+```bash
+cd backend/generate
+bash test_tts.sh
+```
+
+This generates `test_orion.wav` and `test_nova.wav` in the `generate/` folder. Valid files are ~500-700 KB. If you see 44-93 byte files, the server has an error — check its terminal output.
+
+```bash
+# Play a test file on macOS
+open backend/generate/test_orion.wav
+```
+
+---
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `Port 8081 is in use` | Run on Vast.ai: `fuser -k 8081/tcp` then restart the server |
+| `model_loaded: false` in health check | This is normal — model loads on first TTS request (~20s) |
+| `Engine core initialization failed` | You're running the old vLLM-based server. Use `tts_server_hf.py` instead |
+| `accelerate` not found | Run: `/venv/main/bin/pip install accelerate` |
+| Model download stuck at 25% | Clear cache: `rm -rf /workspace/.hf_home/hub/models--SVECTOR*` and re-download with `HF_HUB_ENABLE_HF_TRANSFER=1` |
+| Browser uses robotic voice | Check browser console — if it says `Continue-TTS service available: false`, the SSH tunnel or server is down |
+| SSH tunnel drops | Re-run: `ssh -p <PORT> root@<IP> -L 8081:localhost:8081` |
 
 ---
 
@@ -134,7 +235,7 @@ chat_app/
 │   │   └── ChatBox.css        # Legacy styles (Tailwind used inline)
 │   ├── hooks/
 │   │   ├── useChatModel.js    # Multi-provider chat hook
-│   │   └── useTTS.js          # Text-to-speech hook
+│   │   └── useTTS.js          # Text-to-speech hook (cloud + browser fallback)
 │   ├── config/
 │   │   ├── models.js          # Provider & model definitions
 │   │   └── tts.js             # TTS configuration
@@ -145,10 +246,15 @@ chat_app/
 │   ├── main.jsx
 │   └── index.css              # Tailwind v4 import + base styles
 ├── backend/
-│   ├── tts_server.py          # Flask TTS server (Continue-TTS)
+│   ├── tts_server.py          # Flask TTS server (vLLM — may crash on Vast.ai)
+│   ├── tts_server_hf.py       # Flask TTS server (PyTorch + SNAC — recommended)
+│   ├── continue_tts/          # Extracted continue-tts source (decoder.py)
+│   ├── generate/              # Test audio output folder
+│   │   └── test_tts.sh        # Shell script to test TTS generation
 │   ├── start_server.sh        # One-click server launcher
 │   ├── requirements.txt       # Python dependencies
 │   └── README.md              # Backend-specific docs
+├── .env                       # API keys + VITE_TTS_API_URL
 ├── .env.example
 ├── postcss.config.js
 ├── tailwind.config.js
@@ -158,9 +264,11 @@ chat_app/
 
 ## 🛠️ Tech Stack
 
-| Layer     | Technology                                     |
-|-----------|-------------------------------------------------|
-| Frontend  | React 18, Vite 5, Tailwind CSS v4, Lucide React |
-| LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local)         |
-| TTS       | Continue-TTS (cloud), Browser SpeechSynthesis    |
-| Backend   | Python Flask, PyTorch, vLLM                      |
+| Layer     | Technology                                                |
+|-----------|-----------------------------------------------------------|
+| Frontend  | React 18, Vite 5, Tailwind CSS v4, Lucide React          |
+| LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local)                   |
+| TTS       | Continue-TTS (cloud GPU), Browser SpeechSynthesis (fallback) |
+| Backend   | Python Flask, PyTorch, HuggingFace Transformers, SNAC Codec |
+| Infra     | Vast.ai (GPU rental), SSH tunneling                        |
+
