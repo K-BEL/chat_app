@@ -1,38 +1,42 @@
 #!/bin/bash
-# Test TTS generation by calling the cloud server via SSH tunnel
-# Saves WAV files to this generate/ folder for playback testing
+# Test TTS generation via SSH tunnel
+# Usage: bash test_tts.sh [port]
 
-TTS_URL="${TTS_URL:-http://localhost:8081}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TTS_PORT="${1:-8081}"
+TTS_URL="http://localhost:${TTS_PORT}"
+DIR="$(cd "$(dirname "$0")" && pwd)"
 
+echo ""
 echo "🔍 Checking TTS server at $TTS_URL ..."
-HEALTH=$(curl -s "$TTS_URL/health")
+HEALTH=$(curl -s --max-time 5 "$TTS_URL/health")
+if [ -z "$HEALTH" ]; then
+  echo "❌ Server not reachable at $TTS_URL"
+  echo "   Make sure SSH tunnel and TTS server are running."
+  exit 1
+fi
 echo "Health: $HEALTH"
 echo ""
 
-# Test 1: Generate with default voice (nova)
+# Test 1: Orion voice
 echo "🎤 Test 1: Generating speech with voice=orion ..."
 curl -s -X POST "$TTS_URL/tts/generate" \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello! This is a test of the cloud TTS server using the Orion voice.", "voice": "orion"}' \
-  -o "$SCRIPT_DIR/test_orion.wav"
-echo "  → Saved to $SCRIPT_DIR/test_orion.wav ($(wc -c < "$SCRIPT_DIR/test_orion.wav") bytes)"
+  -d '{"text":"Hello! This is the orion voice speaking from the cloud GPU.","voice":"orion"}' \
+  -o "$DIR/test_orion.wav" --max-time 120
+SIZE=$(wc -c < "$DIR/test_orion.wav" | tr -d ' ')
+echo "  → Saved to $DIR/test_orion.wav ($SIZE bytes)"
 
-# Test 2: Generate with nova voice
+# Test 2: Nova voice
 echo "🎤 Test 2: Generating speech with voice=nova ..."
 curl -s -X POST "$TTS_URL/tts/generate" \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello! This is a test of the cloud TTS server using the Nova voice.", "voice": "nova"}' \
-  -o "$SCRIPT_DIR/test_nova.wav"
-echo "  → Saved to $SCRIPT_DIR/test_nova.wav ($(wc -c < "$SCRIPT_DIR/test_nova.wav") bytes)"
-
-# Test 3: Test tone (440Hz sine wave - no model needed)
-echo "🎤 Test 3: Generating test tone ..."
-curl -s "$TTS_URL/tts/test" -o "$SCRIPT_DIR/test_tone.wav"
-echo "  → Saved to $SCRIPT_DIR/test_tone.wav ($(wc -c < "$SCRIPT_DIR/test_tone.wav") bytes)"
+  -d '{"text":"Hi there! I am the nova voice, running on a remote GPU.","voice":"nova"}' \
+  -o "$DIR/test_nova.wav" --max-time 120
+SIZE=$(wc -c < "$DIR/test_nova.wav" | tr -d ' ')
+echo "  → Saved to $DIR/test_nova.wav ($SIZE bytes)"
 
 echo ""
-echo "✅ Done! Play the files to compare:"
-echo "  open $SCRIPT_DIR/test_orion.wav"
-echo "  open $SCRIPT_DIR/test_nova.wav"
-echo "  open $SCRIPT_DIR/test_tone.wav"
+echo "✅ Done! Valid files should be 400KB-800KB."
+echo "   Play them with:"
+echo "   open $DIR/test_orion.wav"
+echo "   open $DIR/test_nova.wav"
