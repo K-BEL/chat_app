@@ -41,11 +41,47 @@ else
     fail "Python3 not found. Install Python 3.10+ or use a Vast.ai PyTorch template."
 fi
 
-# ─── Step 2: Check CUDA ─────────────────────────────────────────────────────
+# ─── Step 2: Check GPU & CUDA ────────────────────────────────────────────────
 info "Checking GPU availability..."
-$PYTHON -c "import torch; assert torch.cuda.is_available(), 'No GPU'; print(f'GPU: {torch.cuda.get_device_name(0)} ({torch.cuda.get_device_properties(0).total_mem // 1024**3}GB VRAM)')" 2>/dev/null \
-    && ok "CUDA GPU detected" \
-    || warn "No CUDA GPU detected — model will run on CPU (very slow)"
+
+HAS_GPU_HARDWARE=false
+HAS_CUDA_TORCH=false
+
+# Check if NVIDIA GPU hardware exists
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+    HAS_GPU_HARDWARE=true
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1)
+    GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+    ok "NVIDIA GPU detected: $GPU_NAME (${GPU_MEM}MB VRAM)"
+fi
+
+# Check if PyTorch has CUDA support
+if $PYTHON -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+    HAS_CUDA_TORCH=true
+    ok "PyTorch CUDA support is working"
+fi
+
+# GPU exists but PyTorch can't see it → install PyTorch with CUDA
+if $HAS_GPU_HARDWARE && ! $HAS_CUDA_TORCH; then
+    warn "GPU hardware found but PyTorch lacks CUDA support. Installing PyTorch with CUDA..."
+    
+    # Detect CUDA version from nvidia-smi
+    CUDA_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
+    info "NVIDIA driver version: $CUDA_VER"
+    
+    # Install PyTorch with CUDA 12.x (works for most modern GPUs)
+    $PIP install --quiet torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 \
+        2>/dev/null || $PIP install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+    
+    # Verify it worked
+    if $PYTHON -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+        ok "PyTorch with CUDA installed successfully"
+    else
+        warn "Could not enable CUDA in PyTorch. Model will run on CPU (very slow)."
+    fi
+elif ! $HAS_GPU_HARDWARE; then
+    warn "No NVIDIA GPU detected — model will run on CPU (very slow)"
+fi
 
 # ─── Step 3: Install pip dependencies ────────────────────────────────────────
 info "Installing Python dependencies..."
