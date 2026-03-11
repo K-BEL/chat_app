@@ -88,16 +88,16 @@ The app includes a high-fidelity TTS backend powered by the `SVECTOR-CORPORATION
 
 ```bash
 # 1. SSH into Vast.ai with port forwarding
-ssh -p <PORT> root@<IP> -L 8081:localhost:8081
+ssh -p <PORT> root@<IP> -L 8080:localhost:8080
 
 # 2. On the remote machine — start the TTS server (one-click)
 bash /workspace/chat_app/backend/start_server.sh
 
 # OR manually:
-PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server_hf.py
+PORT=8080 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server_hf.py
 
 # 3. On your Mac — update .env and start Vite
-echo "VITE_TTS_API_URL=http://localhost:8081" >> .env
+echo "VITE_TTS_API_URL=http://localhost:8080" >> .env
 npm run dev
 ```
 
@@ -166,13 +166,13 @@ print('Devices:', m.hf_device_map)
 #### 6. Start the TTS Server
 
 ```bash
-PORT=8081 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server.py
+PORT=8080 /venv/main/bin/python3 /workspace/chat_app/backend/tts_server.py
 ```
 
 You should see:
 ```
  * Serving Flask app 'tts_server'
- * Running on http://127.0.0.1:8081
+ * Running on http://127.0.0.1:8080
 ```
 
 #### 7. Set Up SSH Tunnel (From Your Mac)
@@ -180,17 +180,17 @@ You should see:
 Open a **separate terminal** on your Mac:
 
 ```bash
-ssh -p <PORT> root@<IP> -L 8081:localhost:8081
+ssh -p <PORT> root@<IP> -L 8080:localhost:8080
 ```
 
-This tunnels `localhost:8081` on your Mac → port `8081` on the Vast.ai GPU.
+This tunnels `localhost:8080` on your Mac → port `8080` on the Vast.ai GPU.
 
 #### 8. Configure & Run the Frontend
 
 ```bash
 # Set the TTS URL in .env
 # (already done if you followed the quick start)
-VITE_TTS_API_URL=http://localhost:8081
+VITE_TTS_API_URL=http://localhost:8080
 
 # Start Vite
 npm run dev
@@ -222,13 +222,13 @@ open backend/generate/test_orion.wav
 
 | Problem | Solution |
 |---------|----------|
-| `Port 8081 is in use` | Run on Vast.ai: `fuser -k 8081/tcp` then restart the server |
+| `Port 8080 is in use` | Run on Vast.ai: `fuser -k 8080/tcp` then restart the server |
 | `model_loaded: false` in health check | This is normal — model loads on first TTS request (~20s) |
 | `Engine core initialization failed` | You're running the old vLLM-based server. Use `tts_server_hf.py` instead |
 | `accelerate` not found | Run: `/venv/main/bin/pip install accelerate` |
 | Model download stuck at 25% | Clear cache: `rm -rf /workspace/.hf_home/hub/models--SVECTOR*` and re-download with `HF_HUB_ENABLE_HF_TRANSFER=1` |
 | Browser uses robotic voice | Check browser console — if it says `Continue-TTS service available: false`, the SSH tunnel or server is down |
-| SSH tunnel drops | Re-run: `ssh -p <PORT> root@<IP> -L 8081:localhost:8081` |
+| SSH tunnel drops | Re-run: `ssh -p <PORT> root@<IP> -L 8080:localhost:8080` |
 
 ---
 
@@ -255,7 +255,7 @@ The ASR model runs alongside the TTS model on the same GPU. It's included in `st
 To test ASR from the command line:
 
 ```bash
-curl -X POST http://localhost:8081/asr/transcribe \
+curl -X POST http://localhost:8080/asr/transcribe \
   -F "audio=@recording.wav"
 # Returns: {"text": "Hello world", "language": "English"}
 ```

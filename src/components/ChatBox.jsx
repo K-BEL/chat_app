@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useChatModel } from '../hooks/useChatModel'
 import { useTTS } from '../hooks/useTTS'
 import { useASR } from '../hooks/useASR'
+import { useFileUpload } from '../hooks/useFileUpload'
 import { parseMarkdown } from '../utils/markdown'
 import { PROVIDERS, MODELS } from '../config/models'
 import { 
   Settings, Mic, MicOff, MessageSquare, Image as ImageIcon, Paperclip, 
-  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu, Loader2
+  Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu, Loader2, X
 } from 'lucide-react'
 
 // Brand colors for subtle glows
@@ -42,6 +43,10 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
   
   const { speak, stop, isSpeaking, currentMessageId, selectedVoice, setSelectedVoice, voices } = useTTS()
   const { isRecording, isTranscribing, startRecording, stopAndTranscribe } = useASR()
+  const {
+    attachedFiles, isProcessing, fileInputRef, openFilePicker,
+    handleFileSelect, removeFile, clearFiles, buildFileContext, acceptTypes
+  } = useFileUpload()
   const messagesEndRef = useRef(null)
   const isVoiceMode = mode === 'voice'
   const autoPlayRef = useRef(isVoiceMode)
@@ -104,14 +109,18 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (input.trim() && !isLoading) {
+    if ((input.trim() || attachedFiles.length) && !isLoading) {
       stop()
       // Auto-create conversation on first message
       if (!activeConversation) {
         onFirstMessage()
       }
-      sendMessage(input)
+      // Prepend file context if files are attached
+      const fileCtx = buildFileContext()
+      const fullMessage = fileCtx + input
+      sendMessage(fullMessage)
       setInput('')
+      clearFiles()
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
@@ -323,29 +332,51 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
             
             {/* Action Buttons */}
             <div className="flex gap-1.5 pb-1">
-              <button type="button" className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors">
-                <Paperclip className="w-4 h-4" />
+              <button type="button" onClick={openFilePicker} disabled={isProcessing} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors">
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
               </button>
               <button type="button" className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors hidden sm:block">
                 <ImageIcon className="w-4 h-4" />
               </button>
             </div>
 
-            <textarea
-              ref={textareaRef}
-              className="flex-1 bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-[15px] resize-none py-3 min-h-[44px] max-h-[150px] scrollbar-hide leading-relaxed"
-              placeholder="Ask anything or tap a shortcut..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSubmit(e)
-                }
-              }}
-              disabled={isLoading}
-              rows={1}
-            />
+            {/* Attached files + textarea wrapper */}
+            <div className="flex-1 flex flex-col">
+              {/* File chips */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-2 pb-1">
+                  {attachedFiles.map(file => (
+                    <span key={file.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-300 text-xs border border-indigo-500/20">
+                      <FileText className="w-3 h-3" />
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(file.id)}
+                        className="p-0.5 rounded-full hover:bg-white/10 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <textarea
+                ref={textareaRef}
+                className="w-full bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-[15px] resize-none py-3 min-h-[44px] max-h-[150px] scrollbar-hide leading-relaxed"
+                placeholder={attachedFiles.length ? 'Ask about the attached file(s)...' : 'Ask anything or tap a shortcut...'}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSubmit(e)
+                  }
+                }}
+                disabled={isLoading}
+                rows={1}
+              />
+            </div>
 
             <div className="flex items-center gap-2 pb-1 pr-1">
               {/* Mic → Transcribe button */}
@@ -406,6 +437,16 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
               </button>
             </div>
           </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={acceptTypes}
+            onChange={handleFileSelect}
+            className="hidden"
+          />
           
           <div className="text-center mt-3 text-xs text-gray-500">
             Powered by {PROVIDERS[activeProvider]?.name}. AI can make mistakes.
