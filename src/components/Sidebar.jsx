@@ -20,36 +20,39 @@ function Sidebar({ conversations, activeId, onSelect, onCreate, onDelete, isOpen
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Backdrop overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-black/50 z-40"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar panel */}
-      <div className={`
-        fixed z-50 top-0 left-0 h-full w-72
-        glass-panel border-r border-white/10
-        flex flex-col
-        transition-transform duration-300 ease-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      {/* Sidebar — solid #0f0f0f, separation via subtle right shadow instead of border */}
+      <div
+        className={`
+          fixed z-50 top-0 left-0 h-full w-64
+          sidebar-panel
+          flex flex-col
+          transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+        style={{ boxShadow: '1px 0 0 rgba(255,255,255,0.04)' }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Chats</h2>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-4 py-5">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-white/25">Chats</span>
+          <div className="flex items-center gap-1.5">
             <button
               onClick={onCreate}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg text-white/30 hover:text-white/70 hover:bg-white/5 transition-all duration-300 ease-in-out"
               title="New Chat"
             >
               <Plus className="w-4 h-4" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg text-white/30 hover:text-white/70 hover:bg-white/5 transition-all duration-300 ease-in-out"
             >
               <X className="w-4 h-4" />
             </button>
@@ -57,12 +60,11 @@ function Sidebar({ conversations, activeId, onSelect, onCreate, onDelete, isOpen
         </div>
 
         {/* Conversation list */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-2 space-y-0.5">
           {sortedConversations.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">No conversations yet</p>
-              <p className="text-gray-600 text-xs mt-1">Start a new chat to begin</p>
+            <div className="text-center py-16 px-4">
+              <MessageSquare className="w-6 h-6 text-white/10 mx-auto mb-3" />
+              <p className="text-white/20 text-xs">No conversations yet</p>
             </div>
           ) : (
             sortedConversations.map(conv => (
@@ -70,37 +72,25 @@ function Sidebar({ conversations, activeId, onSelect, onCreate, onDelete, isOpen
                 key={conv.id}
                 onClick={() => onSelect(conv.id)}
                 className={`
-                  group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer
-                  transition-all duration-200
+                  group flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer
+                  transition-all duration-300 ease-in-out
                   ${activeId === conv.id
-                    ? 'bg-white/10 border border-white/15 shadow-lg shadow-indigo-500/5'
-                    : 'hover:bg-white/5 border border-transparent'
+                    ? 'bg-white/8 text-white'
+                    : 'text-white/40 hover:bg-white/4 hover:text-white/70'
                   }
                 `}
               >
-                <div className={`
-                  w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                  ${activeId === conv.id 
-                    ? 'bg-indigo-500/20 text-indigo-400' 
-                    : 'bg-white/5 text-gray-500'
-                  }
-                `}>
-                  <MessageSquare className="w-3.5 h-3.5" />
-                </div>
+                <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-60" />
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm truncate ${activeId === conv.id ? 'text-gray-200' : 'text-gray-400'}`}>
-                    {conv.title}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    {conv.messages.length} msgs · {formatDate(conv.updatedAt)}
-                  </p>
+                  <p className="text-[13px] truncate leading-snug">{conv.title}</p>
+                  <p className="text-[10px] text-white/20 mt-0.5">{formatDate(conv.updatedAt)}</p>
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all"
+                  className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/15 text-white/20 hover:text-red-400 transition-all duration-300 ease-in-out"
                   title="Delete"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3 h-3" />
                 </button>
               </div>
             ))
@@ -109,9 +99,9 @@ function Sidebar({ conversations, activeId, onSelect, onCreate, onDelete, isOpen
 
         {/* Footer */}
         {conversations.length > 0 && (
-          <div className="p-3 border-t border-white/10">
-            <p className="text-xs text-gray-600 text-center">
-              {conversations.length} conversation{conversations.length !== 1 ? 's' : ''} · Stored locally
+          <div className="px-4 py-4">
+            <p className="text-[10px] text-white/15 text-center">
+              {conversations.length} chat{conversations.length !== 1 ? 's' : ''} · stored locally
             </p>
           </div>
         )}

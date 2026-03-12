@@ -10,12 +10,12 @@ import {
   Send, User, Bot, Zap, Code, FileText, Lightbulb, Pause, Menu, Loader2, X
 } from 'lucide-react'
 
-// Brand colors for subtle glows
-const brandStyles = {
-  groq: 'from-orange-500/20 to-red-500/20 text-orange-400 border-orange-500/30',
-  openai: 'from-emerald-500/20 to-teal-500/20 text-emerald-400 border-emerald-500/30',
-  anthropic: 'from-amber-500/20 to-orange-500/20 text-amber-400 border-amber-500/30',
-  local: 'from-blue-500/20 to-purple-500/20 text-blue-400 border-blue-500/30'
+// Provider accent colors (minimal — only used for a tiny dot indicator)
+const brandAccents = {
+  groq: '#f97316',
+  openai: '#10b981',
+  anthropic: '#f59e0b',
+  local: '#60a5fa'
 }
 
 function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onFirstMessage, onToggleSidebar }) {
@@ -150,7 +150,7 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
     }
   }
 
-  const providerStyle = brandStyles[activeProvider] || brandStyles.openai
+  const providerStyle = brandAccents[activeProvider] || '#6366f1'
 
   const quickStartCards = [
     { icon: <Code className="w-5 h-5"/>, title: "Analyze Code", desc: "Review, debug or refactor." },
@@ -162,35 +162,36 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
   const activeModelsList = activeProvider === 'local' ? localModels : MODELS[activeProvider]
 
   return (
-    <div className="relative flex flex-col items-center justify-between w-full max-w-5xl mx-auto h-screen p-4 md:p-6 overflow-hidden bg-[#0a0a0a]">
-      {/* Dynamic Background Glow */}
-      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b ${providerStyle} opacity-30 blur-[120px] pointer-events-none rounded-full`} />
+    <div className="relative flex flex-col items-center justify-between w-full max-w-4xl mx-auto h-screen px-4 md:px-8 overflow-hidden">
+      {/* No glow div — pure black bg */}
 
-      {/* Modern Top Nav / Settings Pill */}
+      {/* Top nav — floating glass pill, center-aligned */}
       <div className="relative z-20 w-full flex flex-col items-center mt-2">
-        <div className="glass-panel flex items-center justify-between gap-4 px-4 py-2 rounded-full ring-1 ring-white/10 transition-all shadow-xl">
-          <div className="flex items-center gap-2 border-r border-white/10 pr-4">
+        <div className="glass-panel flex items-center justify-between gap-4 px-4 py-2 rounded-full transition-all duration-300 ease-in-out shadow-lg" style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-2 border-r border-white/8 pr-4">
             <button
               onClick={onToggleSidebar}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-gray-200 transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-white/30 hover:text-white/70 hover:bg-white/5 transition-all duration-300 ease-in-out"
               title="Toggle sidebar"
             >
               <Menu className="w-4 h-4" />
             </button>
-            <span className={`flex items-center justify-center w-8 h-8 rounded-full bg-white/5 border border-white/10 ${providerStyle.split(' ')[2]}`}>
-              <Bot className="w-4 h-4" />
-            </span>
-            <span className="font-semibold tracking-wide text-sm text-gray-200">
+            {/* Tiny accent dot */}
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: brandAccents[activeProvider] || '#6366f1', opacity: 0.7 }}
+            />
+            <span className="font-medium text-sm text-white/60">
               {PROVIDERS[activeProvider]?.name}
             </span>
           </div>
 
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center gap-2 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors text-sm text-gray-300"
+            className="flex items-center gap-2 hover:bg-white/5 px-3 py-1.5 rounded-full transition-all duration-300 ease-in-out text-sm text-white/40 hover:text-white/70"
           >
             <span className="truncate max-w-[150px] md:max-w-xs">{activeModelsList?.find(m => m.id === activeModel)?.name || 'Select Model'}</span>
-            <Settings className={`w-4 h-4 transition-transform duration-300 ${showSettings ? 'rotate-90' : ''}`} />
+            <Settings className={`w-3.5 h-3.5 transition-transform duration-300 ease-in-out ${showSettings ? 'rotate-90' : ''}`} />
           </button>
         </div>
 
@@ -241,101 +242,120 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
       <div className="flex-1 w-full overflow-y-auto scrollbar-hide my-6 pb-32">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center pt-10">
-            <div className={`p-4 rounded-3xl bg-white/5 border border-white/10 mb-8 animate-pulse ${providerStyle.split(' ')[2]}`}>
-              <Bot className="w-12 h-12" />
+            {/* Gemini-style sparkle avatar */}
+            <div className="relative mb-10">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <Bot className="w-7 h-7 text-white/30" />
+              </div>
             </div>
-            <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-200 to-gray-500 mb-2">
-              How can I help you today?
+            <h2 className="text-[28px] font-semibold text-white/80 mb-2 tracking-tight">
+              How can I help you?
             </h2>
-            <p className="text-gray-400 mb-12">Start a conversation or pick an option below.</p>
+            <p className="text-white/25 text-sm mb-12">Start typing or pick an option below.</p>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
               {quickStartCards.map((card, i) => (
                 <button 
                   key={i} 
                   onClick={() => setInput(`I want to ${card.title.toLowerCase()}: `)}
-                  className="flex flex-col items-start p-5 rounded-2xl bg-white/5 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all text-left group"
+                  className="flex flex-col items-start p-4 rounded-2xl border border-white/5 hover:border-white/10 hover:bg-white/4 transition-all duration-300 ease-in-out text-left group"
+                  style={{ background: 'rgba(255,255,255,0.02)' }}
                 >
-                  <div className={`p-2 rounded-lg bg-black/40 mb-3 text-gray-400 group-hover:${providerStyle.split(' ')[2]}`}>
+                  <div className="mb-3 text-white/25 group-hover:text-white/50 transition-colors duration-300 ease-in-out">
                     {card.icon}
                   </div>
-                  <h3 className="text-gray-200 font-semibold mb-1">{card.title}</h3>
-                  <p className="text-gray-500 text-xs leading-relaxed">{card.desc}</p>
+                  <h3 className="text-white/70 text-sm font-medium mb-1">{card.title}</h3>
+                  <p className="text-white/25 text-xs leading-relaxed">{card.desc}</p>
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {messages.map((message, index) => (
-              <div key={index} className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={index} className={`flex w-full message-enter ${
+                message.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}>
+                {/* AI avatar */}
                 {message.role === 'assistant' && (
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1 bg-white/10 border border-white/20 ${providerStyle.split(' ')[2]}`}>
-                    <Bot className="w-4 h-4" />
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mr-3 mt-1" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <Bot className="w-3.5 h-3.5 text-white/40" />
                   </div>
                 )}
                 
-                <div className={`max-w-[85%] md:max-w-[75%] px-5 py-4 rounded-2xl group ${
-                  message.role === 'user' 
-                    ? 'bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-400/20 text-indigo-50 rounded-tr-sm' 
-                    : 'glass-panel text-gray-200 rounded-tl-sm'
-                }`}>
-                  <div 
-                    className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10"
-                    dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
-                  />
-                  
-                  {message.role === 'assistant' && (
-                    <div className="mt-3 flex options-bar opacity-0 group-hover:opacity-100 transition-opacity">
+                {message.role === 'user' ? (
+                  /* User bubble — soft dark box */
+                  <div className="max-w-[75%] px-4 py-3 rounded-3xl group" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div
+                      className="prose prose-invert max-w-none text-[#cccccc] text-[15px]"
+                      style={{ lineHeight: 1.6 }}
+                      dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
+                    />
+                  </div>
+                ) : (
+                  /* AI response — bare text, no bubble */
+                  <div className="flex-1 max-w-[92%] group">
+                    <div
+                      className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/8 text-[#ffffff] text-[15px]"
+                      style={{ lineHeight: 1.6 }}
+                      dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
+                    />
+                    <div className="mt-2 flex options-bar opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out">
                       <button 
                         onClick={() => handleSpeak(message.content, index)}
-                        className={`p-1.5 rounded-lg border flex items-center gap-2 text-xs transition-colors ${
+                        className={`p-1.5 rounded-lg flex items-center gap-1.5 text-xs transition-all duration-300 ease-in-out ${
                           isSpeaking && currentMessageId === index 
-                            ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' 
-                            : 'bg-black/40 border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/10'
+                            ? 'text-amber-400' 
+                            : 'text-white/20 hover:text-white/60'
                         }`}
                       >
                         {isSpeaking && currentMessageId === index ? <><Pause className="w-3 h-3"/> Stop</> : <><Mic className="w-3 h-3"/> Read</>}
                       </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
+                {/* User avatar */}
                 {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full shrink-0 ml-3 mt-1 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center border border-white/20">
-                    <User className="w-4 h-4 text-white" />
+                  <div className="w-7 h-7 rounded-xl shrink-0 ml-3 mt-1 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <User className="w-3.5 h-3.5 text-white/50" />
                   </div>
                 )}
               </div>
             ))}
             
+            {/* Gemini shimmer loading */}
             {isLoading && (
-               <div className="flex w-full justify-start">
-                  <div className={`w-8 h-8 rounded-full shrink-0 mr-3 mt-1 flex items-center justify-center bg-white/10 border border-white/20 ${providerStyle.split(' ')[2]}`}>
-                    <Bot className="w-4 h-4" />
-                  </div>
-                  <div className="glass-panel px-5 py-5 rounded-2xl rounded-tl-sm flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce"></span>
-                    <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0.2s' }}></span>
-                    <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0.4s' }}></span>
-                  </div>
-               </div>
+              <div className="flex w-full justify-start message-enter">
+                <div className="w-7 h-7 rounded-xl shrink-0 mr-3 mt-1 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <Bot className="w-3.5 h-3.5 text-white/30" />
+                </div>
+                <div className="gemini-shimmer w-48 h-5 mt-2" />
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Futuristic Input Area */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[95%] md:w-[760px] z-30">
+      {/* Input area */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[95%] md:w-[720px] z-30">
         <form onSubmit={handleSubmit} className="relative w-full">
-          <div className="glass-panel p-2 pl-4 rounded-3xl flex items-end gap-3 ring-1 ring-white/10 shadow-2xl shadow-indigo-500/10 focus-within:ring-white/30 transition-shadow duration-300">
+          <div
+            className="gemini-input-focus flex items-end gap-3 p-2 pl-4 rounded-3xl transition-all duration-300 ease-in-out"
+            style={{
+              background: 'rgba(30, 30, 30, 0.7)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
             
-            {/* Action Buttons */}
-            <div className="flex gap-1.5 pb-1">
-              <button type="button" onClick={openFilePicker} disabled={isProcessing} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors">
+            {/* Left icons — monochrome */}
+            <div className="flex gap-1 pb-1">
+              <button type="button" onClick={openFilePicker} disabled={isProcessing} className="p-2 rounded-full text-white/30 hover:text-white/70 transition-all duration-300 ease-in-out">
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
               </button>
-              <button type="button" className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors hidden sm:block">
+              <button type="button" className="p-2 rounded-full text-white/30 hover:text-white/70 transition-all duration-300 ease-in-out hidden sm:block">
                 <ImageIcon className="w-4 h-4" />
               </button>
             </div>
@@ -363,8 +383,9 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
 
               <textarea
                 ref={textareaRef}
-                className="w-full bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-[15px] resize-none py-3 min-h-[44px] max-h-[150px] scrollbar-hide leading-relaxed"
-                placeholder={attachedFiles.length ? 'Ask about the attached file(s)...' : 'Ask anything or tap a shortcut...'}
+                className="w-full bg-transparent border-none outline-none text-[15px] resize-none py-3 min-h-[44px] max-h-[150px] scrollbar-hide"
+                style={{ color: '#cccccc', lineHeight: 1.6 }}
+                placeholder={attachedFiles.length ? 'Ask about the attached file(s)...' : 'Message...'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -399,12 +420,12 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
                   }
                 }}
                 disabled={isTranscribing}
-                className={`p-2.5 rounded-full transition-all duration-300 ${
+                className={`p-2 rounded-full transition-all duration-300 ease-in-out ${
                   isRecording 
-                    ? 'bg-red-500/30 text-red-400 ring-2 ring-red-500/50 animate-pulse' 
+                    ? 'text-red-400 animate-pulse' 
                     : isTranscribing
-                    ? 'bg-amber-500/20 text-amber-400 cursor-wait'
-                    : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200'
+                    ? 'text-amber-400 cursor-wait'
+                    : 'text-white/30 hover:text-white/70'
                 }`}
                 title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Record voice'}
               >
@@ -419,18 +440,22 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
               <button 
                 type="button" 
                 onClick={toggleMode}
-                className={`p-2.5 rounded-full transition-colors ${mode === 'voice' ? 'bg-indigo-500/30 text-indigo-400' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200'}`}
+                className={`p-2 rounded-full transition-all duration-300 ease-in-out ${
+                  mode === 'voice' 
+                    ? 'text-violet-400' 
+                    : 'text-white/30 hover:text-white/70'
+                }`}
                 title="Voice Mode"
               >
                 {mode === 'voice' ? <Mic className="w-4 h-4 animate-pulse" /> : <MessageSquare className="w-4 h-4" />}
               </button>
               <button
                 type="submit"
-                disabled={!input.trim() || isLoading}
-                className={`p-2.5 rounded-full transition-all duration-300 ${
-                  !input.trim() || isLoading 
-                    ? 'bg-white/5 text-gray-500 cursor-not-allowed' 
-                    : 'bg-white text-black hover:bg-gray-200 shadow-lg shadow-white/20 scale-105'
+                disabled={(!input.trim() && !attachedFiles.length) || isLoading}
+                className={`p-2.5 rounded-full transition-all duration-300 ease-in-out ${
+                  (!input.trim() && !attachedFiles.length) || isLoading
+                    ? 'text-white/15 cursor-not-allowed' 
+                    : 'bg-white text-black hover:bg-white/90 shadow-lg shadow-white/10'
                 }`}
               >
                 <Send className="w-4 h-4" />
@@ -448,8 +473,8 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
             className="hidden"
           />
           
-          <div className="text-center mt-3 text-xs text-gray-500">
-            Powered by {PROVIDERS[activeProvider]?.name}. AI can make mistakes.
+          <div className="text-center mt-3 text-[11px]" style={{ color: 'rgba(255,255,255,0.18)' }}>
+            {PROVIDERS[activeProvider]?.name} · AI can make mistakes.
           </div>
         </form>
       </div>
