@@ -25,40 +25,57 @@ A premium, glassmorphic chat application built with **React**, **Tailwind CSS v4
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
+- [Python](https://python.org/) (v3.10+)
 - An API Key from at least one provider (see below)
 
-### 1. Install Dependencies
+### 1. Setup the Backend (FastAPI + SQLite)
+
+The chat application now features a robust FastAPI backend to securely handle API keys, database storage, and LLM streaming.
+
+```bash
+cd chat_app/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Start the FastAPI server:
+```bash
+# Set your API keys in the environment or create a backend/.env file
+export GROQ_API_KEY="your_key"
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+```
+The backend will run on `http://localhost:8080`.
+
+### 2. Configure Frontend Environment
 
 ```bash
 cd chat_app
-npm install
-```
-
-### 2. Configure Environment Variables
-
-```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your API key(s):
+Edit `.env` and set the frontend API URL (API keys are no longer needed in the frontend):
 
 ```env
-# Required: Add at least one provider key
-VITE_GROQ_API_KEY=gsk_your_groq_key_here
-VITE_OPENAI_API_KEY=sk-your_openai_key_here
-VITE_ANTHROPIC_API_KEY=sk-ant-your_anthropic_key_here
-
-# Optional: TTS backend URL (see Section 3 below)
-# VITE_TTS_API_URL=http://localhost:5001
+# Frontend Environment Variables (Vite)
+VITE_API_URL=http://localhost:8080
 ```
 
-### 3. Start the Dev Server
+### 3. Start the Frontend Dev Server
 
 ```bash
+npm install
 npm run dev
 ```
 
 Open `http://localhost:5173` in your browser.
+
+### Using Docker (Alternative Setup)
+You can launch both the frontend (served via FastAPI static optionally or a separate container) and the backend easily via `docker-compose`:
+```bash
+docker-compose up -d --build
+```
+This requires a created `.env` file in the root directory formatted like `.env.example`.
 
 ### Where to Get API Keys
 
@@ -274,33 +291,29 @@ chat_app/
 │   │   ├── Sidebar.jsx        # Conversation history sidebar
 │   │   └── ChatBox.css        # Legacy styles (Tailwind used inline)
 │   ├── hooks/
-│   │   ├── useChatModel.js    # Multi-provider chat hook (with persistence)
-│   │   ├── useConversations.js # Conversation CRUD + localStorage
-│   │   ├── useASR.js          # Mic recording + Qwen3-ASR transcription
-│   │   └── useTTS.js          # TTS hook (cloud + browser fallback + voice picker)
+│   │   ├── useChatModel.js    # Multi-provider SSE chat hook
+│   │   ├── useConversations.js # Conversation CRUD (FastAPI/SQLite integration)
+│   │   ├── useASR.js          # Mic recording + backend transcription
+│   │   └── useTTS.js          # TTS hook (cloud + browser fallback)
 │   ├── config/
 │   │   ├── models.js          # Provider & model definitions
-│   │   └── tts.js             # TTS config (voices, API URL, timeouts)
-│   ├── utils/
-│   │   └── markdown.js        # Markdown parsing utility
+│   │   └── tts.js             # General backend API config
 │   ├── App.jsx                # Root layout (sidebar + chat)
-│   ├── App.css
-│   ├── main.jsx
 │   └── index.css              # Tailwind v4 import + base styles
 ├── backend/
-│   ├── tts_server_hf.py       # Flask TTS + ASR server (PyTorch + SNAC + Qwen3-ASR)
-│   ├── tts_server.py          # Flask TTS server (vLLM — may crash on Vast.ai)
-│   ├── continue_tts/          # Extracted continue-tts source (decoder.py)
-│   ├── generate/              # Test audio output folder
-│   │   └── test_tts.sh        # Shell script to test TTS generation
-│   ├── start_server.sh        # One-click installer & launcher (auto-installs deps, CUDA, model)
+│   ├── app/
+│   │   ├── main.py            # FastAPI Entrypoint
+│   │   ├── config.py          # Pydantic secure settings (API keys)
+│   │   ├── database.py        # aiosqlite connection setup
+│   │   ├── models.py          # SQLModel definitions (Conversation, Message)
+│   │   ├── routers/           # Dedicated routers (/chat, /tts, /asr, /conversations)
+│   │   └── services/          # Business logic (`llm_service`, `tts_service`)
+│   ├── tests/                 # Pytest suite
 │   ├── requirements.txt       # Python dependencies
 │   └── README.md              # Backend-specific docs
-├── .env                       # API keys + VITE_TTS_API_URL
-├── .env.example
-├── postcss.config.js
-├── tailwind.config.js
-├── vite.config.js
+├── Dockerfile                 # Multi-stage Docker build
+├── docker-compose.yml         # 1-click orchestration
+├── .env                       # Backend Secure Config (API keys) + VITE_API_URL
 └── package.json
 ```
 
@@ -309,10 +322,11 @@ chat_app/
 | Layer     | Technology                                                |
 |-----------|-----------------------------------------------------------|
 | Frontend  | React 18, Vite 5, Tailwind CSS v4, Lucide React          |
-| LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local)                   |
+| Backend   | Python FastAPI, WebSockets/SSE, Pydantic, SQLModel          |
+| Database  | SQLite (`aiosqlite` asynchronous engine)                 |
+| LLM APIs  | Groq, OpenAI, Anthropic, Ollama (local) via server proxy  |
 | TTS       | Continue-TTS (cloud GPU), Browser SpeechSynthesis (fallback) |
 | ASR       | Qwen3-ASR-1.7B (cloud GPU), 52 languages                    |
-| Storage   | Browser localStorage (conversation history)                |
-| Backend   | Python Flask, PyTorch, HuggingFace Transformers, SNAC Codec |
-| Infra     | Vast.ai (GPU rental), SSH tunneling                        |
+| DevOps    | Docker, Docker Compose, Pre-commit hooks                    |
+
 

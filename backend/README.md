@@ -1,96 +1,85 @@
-# Continue-TTS Backend Server
+# Chat App Backend (FastAPI)
 
-This backend provides a REST API for the Continue-TTS model from Hugging Face.
+This backend provides a high-performance REST API built with **FastAPI**, **SQLite**, and **Server-Sent Events (SSE)**. It replaces the legacy Flask monolithic server.
 
-## Setup
+## 🚀 Features
 
-1. **Install Python dependencies:**
+- **Multi-Provider LLM Proxy**: Connects to Groq, OpenAI, Anthropic, and Local Ollama via a unified streaming interface (`/chat/stream`). API keys are kept secure server-side.
+- **SQLite Database**: Uses `aiosqlite` and `SQLModel` to persist conversation history locally.
+- **TTS Generation**: Wraps the Hugging Face `Continue-TTS` model (via `/tts/generate`).
+- **Modular Routers**: Functionality split across well-defined FastAPI routers.
+
+---
+
+## ⚙️ Setup
+
+1. **Create a Virtual Environment:**
 ```bash
 cd backend
+python3 -m venv venv
+source venv/bin/activate
+```
+
+2. **Install Dependencies:**
+```bash
 pip install -r requirements.txt
 ```
 
-2. **Install Continue-TTS package:**
-```bash
-pip install continue-speech
+3. **Configure Environment Variables:**
+Create a `.env` file in the root directory (or set them in your environment):
+```env
+GROQ_API_KEY=your_groq_key
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
+DATABASE_URL=sqlite+aiosqlite:///./chat_app.db # Optional (defaults to this)
 ```
 
-3. **Run the server:**
+4. **Run the Server:**
 ```bash
-python tts_server.py
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
+The server will start on `http://localhost:8080`.
 
-The server will start on `http://localhost:5000`
+Interactive Swagger UI docs are available at: `http://localhost:8080/docs`
 
-## API Endpoints
+---
+
+## 📡 Core API Endpoints
 
 ### `GET /health`
-Health check endpoint.
+Health check endpoint to verify TTS model loading and DB.
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model_loaded": true
-}
-```
+### `POST /chat/stream`
+Send messages to an LLM provider (Groq, OpenAI, Anthropic, Local) and receive Server-Sent Events (SSE) streaming back.
+
+### `GET /conversations` & `POST /conversations`
+Retrieve all conversations or create a new empty conversation snippet.
+
+### `GET /conversations/{id}`
+Retrieve a specific conversation history including all messages.
 
 ### `POST /tts/generate`
-Generate speech from text.
+Generate speech from text via the `Continue-TTS` model.
+* **Payload:** `{"text": "Hello world", "voice": "nova"}`
+* **Returns:** `.wav` audio buffer.
 
-**Request:**
-```json
-{
-  "text": "Hello, this is a test message.",
-  "voice": "nova"
-}
+---
+
+## 🐳 Docker Deployment
+
+To launch the backend (and an optional frontend container) without manual setup, run the multi-stage Docker file from the project root:
+
+```bash
+cd ..
+docker-compose up -d --build
 ```
 
-**Response:** Audio file (WAV format, 24kHz, mono)
+---
 
-**Available voices:**
-- `nova` (Female) - Conversational and natural
-- `aurora` (Female) - Warm and friendly
-- `stellar` (Female) - Energetic and bright
-- `atlas` (Male) - Deep and authoritative
-- `orion` (Male) - Friendly and casual
-- `luna` (Female) - Soft and gentle
-- `phoenix` (Male) - Dynamic and expressive
-- `ember` (Female) - Warm and engaging
+## 📝 Testing
 
-### `GET /tts/voices`
-Get list of available voices.
-
-**Response:**
-```json
-{
-  "voices": [
-    {
-      "id": "nova",
-      "name": "Nova",
-      "gender": "Female",
-      "description": "Conversational and natural"
-    },
-    ...
-  ]
-}
+We use `pytest` for backend unit tests:
+```bash
+pytest tests/
 ```
-
-## Environment Variables
-
-- `PORT` - Server port (default: 5000)
-- `DEBUG` - Enable debug mode (default: False)
-
-## Requirements
-
-- Python 3.8+
-- GPU recommended for real-time generation (~7GB VRAM for FP16)
-- ~14GB VRAM for FP32
-
-## Notes
-
-- The model is loaded on first request (lazy loading)
-- First request may take longer as the model downloads and loads
-- Subsequent requests will be faster
-- For production, consider pre-loading the model at startup
 
