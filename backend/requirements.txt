@@ -1,8 +1,28 @@
-flask==3.0.0
-flask-cors==4.0.0
+# FastAPI Core
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic-settings>=2.2.1
+python-multipart>=0.0.9
+
+# Database
+sqlmodel>=0.0.16
+aiosqlite>=0.20.0
+
+# LLM APIs
+openai>=1.14.0
+anthropic>=0.21.3
+groq>=0.4.2
+httpx>=0.27.0
+sse-starlette>=2.0.0
+
+# TTS/ASR
 transformers==4.36.0
 torch>=2.0.0
 snac>=0.1.0
 continue-speech>=0.1.0
 numpy>=1.24.0
 vllm
+
+# CORS
+fastapi[all]
+pytest

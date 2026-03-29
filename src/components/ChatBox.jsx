@@ -30,6 +30,7 @@ function ChatBox({ mode, onModeChange, activeConversation, onMessagesChange, onF
   } = useChatModel('groq', 'llama-3.3-70b-versatile', {
     initialMessages: activeConversation?.messages || [],
     onMessagesChange,
+    activeConversationId: activeConversation?.id
   })
 
   // Load messages when switching conversations

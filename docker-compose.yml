@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/chat_app.db:/app/chat_app.db
+    env_file:
+      - .env
+    restart: always

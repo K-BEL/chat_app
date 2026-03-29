@@ -1,119 +1,106 @@
 import { useState, useEffect, useRef } from 'react';
 import { PROVIDERS, MODELS } from '../config/models';
 
-export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3-70b-versatile', { initialMessages = [], onMessagesChange } = {}) {
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+export function useChatModel(initialProvider = 'groq', initialModel = 'llama-3.3-70b-versatile', { initialMessages = [], onMessagesChange, activeConversationId = null } = {}) {
   const [messages, setMessages] = useState(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   
   const [activeProvider, setActiveProvider] = useState(initialProvider);
   const [activeModel, setActiveModel] = useState(initialModel);
   const onMessagesChangeRef = useRef(onMessagesChange);
-  onMessagesChangeRef.current = onMessagesChange;
+  
+  useEffect(() => {
+    onMessagesChangeRef.current = onMessagesChange;
+  }, [onMessagesChange]);
 
-  // Notify parent when messages change (for persistence)
+  // Notify parent when messages change
   useEffect(() => {
     if (onMessagesChangeRef.current) {
       onMessagesChangeRef.current(messages);
     }
   }, [messages]);
 
-  // Allow loading a different conversation's messages
   const loadMessages = (newMessages) => {
     setMessages(newMessages);
   };
 
   const sendMessage = async (userMessage) => {
     const userMsg = { role: 'user', content: userMessage };
-    setMessages(prev => [...prev, userMsg]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      const providerConfig = PROVIDERS[activeProvider];
-      if (!providerConfig) {
-        throw new Error(`Unknown provider: ${activeProvider}`);
+      const response = await fetch(`${API_URL}/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider: activeProvider,
+          model: activeModel,
+          messages: newMessages,
+          conversation_id: activeConversationId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
       }
 
-      // Check API Key unless it's a local model
-      let apiKey = null;
-      if (providerConfig.envKey) {
-        apiKey = import.meta.env[providerConfig.envKey];
-        if (!apiKey) {
-          throw new Error(`Missing ${providerConfig.envKey} in .env file. Please check your configuration.`);
-        }
-      }
-
-      // Build conversation history
-      const conversationHistory = [...messages, userMsg].map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      let apiResponse;
-
-      if (providerConfig.format === 'openai') {
-        // OpenAI-compatible format (OpenAI, Groq, Local/Ollama)
-        const response = await fetch(providerConfig.apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(apiKey && { 'Authorization': `Bearer ${apiKey}` }),
-          },
-          body: JSON.stringify({
-            model: activeModel,
-            messages: conversationHistory,
-            temperature: 0.7,
-            ...(activeProvider !== 'openai' && { max_tokens: 1024 }),
-          }),
-        });
-        
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || `Request failed with status ${response.status}`);
-        }
-
-        apiResponse = data.choices?.[0]?.message?.content || '(no reply)';
-
-      } else if (providerConfig.format === 'anthropic') {
-         const claudeMessages = conversationHistory.filter(m => m.role !== 'system');
-         
-         const response = await fetch(providerConfig.apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: activeModel,
-            messages: claudeMessages,
-            max_tokens: 1024,
-            temperature: 0.7,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || `Request failed with status ${response.status}`);
-        }
-
-        apiResponse = data.content?.[0]?.text || '(no reply)';
-      }
-
-      const aiMsg = { role: 'assistant', content: apiResponse };
+      // Initialize the assistant message with empty content
+      const aiMsg = { role: 'assistant', content: '' };
       setMessages(prev => [...prev, aiMsg]);
+      setIsLoading(false); // We got response headers, stop the "spinner"
+
+      // Process Server-Sent Events (SSE) from the response body stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      
+      let aiContent = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            if (dataStr === '[DONE]') {
+              break;
+            }
+            try {
+              // we can send raw strings or JSON. If the backend sends raw strings per chunk:
+              // we just append it. If it sends JSON, we parse it.
+              // Based on our FastAPI backend implementation, we are sending raw chunks exactly inside 'data: ' events
+              let parsedData = dataStr;
+              try {
+                  parsedData = JSON.parse(dataStr);
+              } catch (_) { } // Not JSON, just append raw string
+              
+              aiContent += parsedData;
+              // Update state by updating the last message
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'assistant', content: aiContent };
+                return updated;
+              });
+            } catch (e) {
+              console.error('Error parsing SSE data line:', line, e);
+            }
+          }
+        }
+      }
 
     } catch (err) {
-      // Format error message
-      const errorContent = err.message.includes('Rate limit') || err.message.includes('quota')
-        ? err.message 
-        : `❌ Error: ${err.message}`;
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: errorContent }]);
+      setIsLoading(false);
+      setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
     }
-
-    setIsLoading(false);
   };
 
   return {
